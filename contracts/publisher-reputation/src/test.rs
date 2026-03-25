@@ -218,3 +218,113 @@ fn test_get_review_count_initial() {
     let (c, _, _) = setup(&env);
     assert_eq!(c.get_review_count(&Address::generate(&env)), 0);
 }
+
+#[test]
+fn test_update_uptime_repeated_calls_no_inflation() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, oracle) = setup(&env);
+    let pub1 = Address::generate(&env);
+    c.init_publisher(&pub1);
+    
+    // First call with 95% uptime
+    c.update_uptime(&oracle, &pub1, &95u32);
+    let rep1 = c.get_reputation(&pub1).unwrap();
+    assert_eq!(rep1.uptime_score, 95);
+    assert_eq!(rep1.score, 519); // 500 + 95/5 = 500 + 19
+    
+    // Second call with same uptime should not inflate
+    c.update_uptime(&oracle, &pub1, &95u32);
+    let rep2 = c.get_reputation(&pub1).unwrap();
+    assert_eq!(rep2.uptime_score, 95);
+    assert_eq!(rep2.score, 519); // Should remain the same
+    
+    // Third call with same uptime
+    c.update_uptime(&oracle, &pub1, &95u32);
+    let rep3 = c.get_reputation(&pub1).unwrap();
+    assert_eq!(rep3.score, 519); // Still the same
+}
+
+#[test]
+fn test_update_uptime_recalculates_on_change() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, oracle) = setup(&env);
+    let pub1 = Address::generate(&env);
+    c.init_publisher(&pub1);
+    
+    // First call with 100% uptime
+    c.update_uptime(&oracle, &pub1, &100u32);
+    let rep1 = c.get_reputation(&pub1).unwrap();
+    assert_eq!(rep1.score, 520); // 500 + 100/5 = 500 + 20
+    
+    // Update to 90% uptime
+    c.update_uptime(&oracle, &pub1, &90u32);
+    let rep2 = c.get_reputation(&pub1).unwrap();
+    assert_eq!(rep2.score, 518); // 500 + 90/5 = 500 + 18
+    
+    // Update to 95% uptime
+    c.update_uptime(&oracle, &pub1, &95u32);
+    let rep3 = c.get_reputation(&pub1).unwrap();
+    assert_eq!(rep3.score, 519); // 500 + 95/5 = 500 + 19
+}
+
+#[test]
+fn test_update_uptime_below_threshold_no_bonus() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, oracle) = setup(&env);
+    let pub1 = Address::generate(&env);
+    c.init_publisher(&pub1);
+    
+    // Uptime below 90% should not add bonus
+    c.update_uptime(&oracle, &pub1, &85u32);
+    let rep = c.get_reputation(&pub1).unwrap();
+    assert_eq!(rep.uptime_score, 85);
+    assert_eq!(rep.score, 500); // No change from initial score
+    assert_eq!(rep.uptime_contribution, 0);
+}
+
+#[test]
+fn test_update_uptime_with_reviews_preserves_review_score() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, oracle) = setup(&env);
+    let pub1 = Address::generate(&env);
+    let adv = Address::generate(&env);
+    c.init_publisher(&pub1);
+    
+    // Add positive review
+    c.submit_review(&adv, &pub1, &1u64, &true, &5u32);
+    let rep1 = c.get_reputation(&pub1).unwrap();
+    assert_eq!(rep1.score, 510); // 500 + 5*2
+    
+    // Update uptime to 100%
+    c.update_uptime(&oracle, &pub1, &100u32);
+    let rep2 = c.get_reputation(&pub1).unwrap();
+    assert_eq!(rep2.score, 530); // 510 + 100/5 = 510 + 20
+    
+    // Update uptime again with same value - should not inflate
+    c.update_uptime(&oracle, &pub1, &100u32);
+    let rep3 = c.get_reputation(&pub1).unwrap();
+    assert_eq!(rep3.score, 530); // Should remain the same
+}
+
+#[test]
+fn test_update_uptime_multiple_rapid_calls() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, oracle) = setup(&env);
+    let pub1 = Address::generate(&env);
+    c.init_publisher(&pub1);
+    
+    // Simulate rapid repeated calls with high uptime
+    for _ in 0..10 {
+        c.update_uptime(&oracle, &pub1, &100u32);
+    }
+    
+    let rep = c.get_reputation(&pub1).unwrap();
+    // Score should be 520 (500 + 20), not inflated to 700 (500 + 10*20)
+    assert_eq!(rep.score, 520);
+    assert_eq!(rep.uptime_contribution, 20);
+}

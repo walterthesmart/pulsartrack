@@ -17,6 +17,7 @@ pub struct ReputationScore {
     pub quality_score: u32, // 0-100
     pub last_slash_ledger: u32,
     pub last_updated: u64,
+    pub uptime_contribution: u32, // Track the current uptime contribution to score
 }
 
 #[contracttype]
@@ -87,6 +88,7 @@ impl PublisherReputationContract {
             quality_score: 100,
             last_slash_ledger: 0,
             last_updated: env.ledger().timestamp(),
+            uptime_contribution: 0,
         };
 
         let _ttl_key = DataKey::Reputation(publisher);
@@ -240,14 +242,20 @@ impl PublisherReputationContract {
             .get(&DataKey::Reputation(publisher.clone()))
             .expect("publisher not registered");
 
-        rep.uptime_score = uptime;
-        if uptime < 90 {
-            let penalty = (90 - uptime) * 2;
-            rep.score = rep.score.saturating_sub(penalty);
+        // Remove the previous uptime contribution from the score
+        rep.score = rep.score.saturating_sub(rep.uptime_contribution);
+
+        // Calculate new uptime contribution
+        let new_contribution = if uptime >= 90 {
+            uptime / 5 // up to 20 points for uptime >= 90
         } else {
-            let uptime_weight = uptime / 5; // up to 20 points
-            rep.score = (rep.score + uptime_weight).min(1000);
-        }
+            0 // no bonus for uptime < 90
+        };
+
+        // Apply the new uptime contribution
+        rep.score = (rep.score + new_contribution).min(1000);
+        rep.uptime_score = uptime;
+        rep.uptime_contribution = new_contribution;
         rep.last_updated = env.ledger().timestamp();
 
         let _ttl_key = DataKey::Reputation(publisher);

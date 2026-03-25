@@ -13,6 +13,7 @@ pub struct PoolState {
     pub utilization_rate: u32, // percentage borrowed
     pub borrow_rate_bps: u32,  // annual rate in basis points
     pub last_updated: u64,
+    pub interest_reserve: i128, // Accumulated interest payments
 }
 
 #[contracttype]
@@ -79,6 +80,7 @@ impl LiquidityPoolContract {
                 utilization_rate: 0,
                 borrow_rate_bps: 500, // 5% annual
                 last_updated: env.ledger().timestamp(),
+                interest_reserve: 0,
             },
         );
     }
@@ -263,13 +265,63 @@ impl LiquidityPoolContract {
         token_client.transfer(&env.current_contract_address(), &borrower, &amount);
     }
 
+    /// Calculate interest accrued on a borrow position
+    /// Formula: interest = principal * rate * time / (10000 * seconds_per_year)
+    /// rate is in basis points (bps), so 500 bps = 5%
+    fn calculate_interest(env: &Env, borrowed: i128, borrowed_at: u64, rate_bps: u32) -> i128 {
+        let now = env.ledger().timestamp();
+        let time_elapsed = now.saturating_sub(borrowed_at);
+        
+        // Approximate seconds per year (365.25 days)
+        const SECONDS_PER_YEAR: u64 = 31_557_600;
+        
+        // interest = principal * rate_bps * time_elapsed / (10000 * SECONDS_PER_YEAR)
+        // Using i128 to avoid overflow
+        let interest = (borrowed as i128)
+            .saturating_mul(rate_bps as i128)
+            .saturating_mul(time_elapsed as i128)
+            / (10000i128 * SECONDS_PER_YEAR as i128);
+        
+        interest
+    }
+
+    /// Accrue interest on a borrow position
+    pub fn accrue_interest(env: Env, campaign_id: u64) -> i128 {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        let mut borrow: BorrowPosition = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Borrow(campaign_id))
+            .expect("borrow not found");
+
+        let pool: PoolState = env.storage().instance().get(&DataKey::PoolState).unwrap();
+        
+        // Calculate new interest since last accrual
+        let new_interest = Self::calculate_interest(&env, borrow.borrowed, borrow.borrowed_at, pool.borrow_rate_bps);
+        
+        borrow.interest_accrued = new_interest;
+        
+        let _ttl_key = DataKey::Borrow(campaign_id);
+        env.storage().persistent().set(&_ttl_key, &borrow);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+
+        new_interest
+    }
+
     pub fn repay(env: Env, borrower: Address, campaign_id: u64, amount: i128) {
         env.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         borrower.require_auth();
 
-        let borrow: BorrowPosition = env
+        let mut borrow: BorrowPosition = env
             .storage()
             .persistent()
             .get(&DataKey::Borrow(campaign_id))
@@ -277,6 +329,17 @@ impl LiquidityPoolContract {
 
         if borrow.borrower != borrower {
             panic!("unauthorized");
+        }
+
+        // Accrue interest up to current time
+        let pool: PoolState = env.storage().instance().get(&DataKey::PoolState).unwrap();
+        let accrued_interest = Self::calculate_interest(&env, borrow.borrowed, borrow.borrowed_at, pool.borrow_rate_bps);
+        borrow.interest_accrued = accrued_interest;
+        
+        let total_owed = borrow.borrowed + borrow.interest_accrued;
+        
+        if amount < total_owed {
+            panic!("insufficient payment");
         }
 
         let token_addr: Address = env
@@ -288,17 +351,37 @@ impl LiquidityPoolContract {
         token_client.transfer(&borrower, &env.current_contract_address(), &amount);
 
         let mut pool: PoolState = env.storage().instance().get(&DataKey::PoolState).unwrap();
-        pool.total_borrowed -= amount.min(borrow.borrowed);
+        
+        // Separate principal repayment from interest
+        let principal_repaid = borrow.borrowed;
+        let interest_paid = borrow.interest_accrued;
+        let overpayment = amount.saturating_sub(total_owed);
+        
+        // Reduce total_borrowed by principal repaid
+        pool.total_borrowed -= principal_repaid;
+        
+        // Interest goes to separate reserve (not added to total_liquidity)
+        pool.interest_reserve += interest_paid;
+        
         if pool.total_liquidity > 0 {
             pool.utilization_rate = ((pool.total_borrowed * 100) / pool.total_liquidity) as u32;
         }
-        pool.total_liquidity += amount;
         pool.last_updated = env.ledger().timestamp();
         env.storage().instance().set(&DataKey::PoolState, &pool);
 
         env.storage()
             .persistent()
             .remove(&DataKey::Borrow(campaign_id));
+        
+        // Return overpayment if any
+        if overpayment > 0 {
+            token_client.transfer(&env.current_contract_address(), &borrower, &overpayment);
+        }
+        
+        env.events().publish(
+            (symbol_short!("pool"), symbol_short!("repay")),
+            (borrower, campaign_id, principal_repaid, interest_paid),
+        );
     }
 
     pub fn get_pool_state(env: Env) -> PoolState {
