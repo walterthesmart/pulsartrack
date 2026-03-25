@@ -55,7 +55,7 @@ export function CampaignForm({ onSuccess, onCancel }: CampaignFormProps) {
         durationDays: data.durationDays as number,
         targetViews: parseInt(data.targetViews),
         dailyViewLimit: parseInt(data.dailyViewLimit),
-        refundable: data.refundable,
+        refundable: data.refundable ?? true,
       });
       onSuccess?.((result as any)?.result || 0);
       reset();

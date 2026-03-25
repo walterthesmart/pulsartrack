@@ -11,9 +11,11 @@ vi.mock('@/lib/soroban-client', () => ({
     callReadOnly: vi.fn(),
     callContract: vi.fn(),
     u64ToScVal: vi.fn((v) => ({ _type: 'u64', value: v })),
+    u32ToScVal: vi.fn((v) => ({ _type: 'u32', value: v })),
     stringToScVal: vi.fn((v) => ({ _type: 'string', value: v })),
     i128ToScVal: vi.fn((v) => ({ _type: 'i128', value: v })),
     addressToScVal: vi.fn((v) => ({ _type: 'address', value: v })),
+    boolToScVal: vi.fn((v) => ({ _type: 'bool', value: v })),
 }));
 
 const createWrapper = () => {
@@ -25,8 +27,8 @@ const createWrapper = () => {
         },
     });
     return ({ children }: { children: React.ReactNode }) => (
-        <QueryClientProvider client= { queryClient } >
-        { children }
+        <QueryClientProvider client={queryClient}>
+            {children}
         </QueryClientProvider>
     );
 };
@@ -83,12 +85,13 @@ describe('useContract hooks', () => {
 
             await act(async () => {
                 await result.current.createCampaign({
-                    title: 'New Campaign',
-                    budgetXlm: 100,
-                    dailyBudgetXlm: 10,
-                    durationDays: 30,
-                    contentId: 'ipfs://...',
                     campaignType: 1,
+                    budgetXlm: 100,
+                    costPerViewXlm: 0.001,
+                    durationDays: 30,
+                    targetViews: 100000,
+                    dailyViewLimit: 5000,
+                    refundable: true,
                 });
             });
 
