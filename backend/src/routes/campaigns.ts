@@ -58,8 +58,8 @@ router.post('/', requireAuth, validate({
     const { title, contentId, budgetStroops, dailyBudgetStroops } = req.body;
 
     const { rows } = await pool.query(
-      `INSERT INTO campaigns (campaign_id, advertiser, title, content_id, budget_stroops, daily_budget_stroops)
-       VALUES ((SELECT COALESCE(MAX(campaign_id), 0) + 1 FROM campaigns), $1, $2, $3, $4, $5)
+      `INSERT INTO campaigns (advertiser, title, content_id, budget_stroops, daily_budget_stroops)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
       [address, title, contentId, budgetStroops, dailyBudgetStroops]
     );
