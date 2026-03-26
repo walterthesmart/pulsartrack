@@ -66,6 +66,15 @@ router.post('/register', requireAuth, validate({
     const address = (req as any).stellarAddress;
     const { displayName, website } = req.body;
 
+    // Check for duplicate registration
+    const existing = await pool.query(
+      `SELECT id FROM publishers WHERE address = $1`,
+      [address]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Publisher already registered' });
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO publishers (address, display_name, website)
        VALUES ($1, $2, $3) RETURNING *`,

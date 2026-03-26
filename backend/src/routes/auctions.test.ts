@@ -6,6 +6,7 @@ import { generateTestToken } from '../test-utils';
 
 describe('Auction Routes', () => {
     const mockAddress = 'GB7V7Z5K64I6U6I7U6I7U6I7U6I7U6I7U6I7U6I7U6I7U6I7U6I7';
+    const otherAddress = 'GD7V7Z5K64I6U6I7U6I7U6I7U6I7U6I7U6I7U6I7U6I7U6I7U6I7';
     const token = generateTestToken(mockAddress);
 
     describe('GET /api/auctions', () => {
@@ -40,15 +41,27 @@ describe('Auction Routes', () => {
                 amountStroops: 150
             };
 
-            (pool.query as any).mockResolvedValue({
-                rows: [{
-                    id: 'bid-uuid',
-                    auction_id: 1,
-                    bidder: mockAddress,
-                    campaign_id: bidData.campaignId,
-                    amount_stroops: bidData.amountStroops
-                }]
-            });
+            (pool.query as any)
+                // Auction lookup
+                .mockResolvedValueOnce({
+                    rows: [{ publisher: otherAddress, floor_price_stroops: '100', status: 'Open' }]
+                })
+                // Campaign ownership check
+                .mockResolvedValueOnce({
+                    rows: [{ advertiser: mockAddress }]
+                })
+                // Insert bid
+                .mockResolvedValueOnce({
+                    rows: [{
+                        id: 'bid-uuid',
+                        auction_id: 1,
+                        bidder: mockAddress,
+                        campaign_id: bidData.campaignId,
+                        amount_stroops: bidData.amountStroops
+                    }]
+                })
+                // Update bid count
+                .mockResolvedValueOnce({ rows: [] });
 
             const response = await request(app)
                 .post('/api/auctions/1/bid')
@@ -66,6 +79,94 @@ describe('Auction Routes', () => {
                 .send({ campaignId: 1, amountStroops: 150 });
 
             expect(response.status).toBe(401);
+        });
+
+        it('should return 404 when auction does not exist', async () => {
+            (pool.query as any).mockResolvedValueOnce({ rows: [] });
+
+            const response = await request(app)
+                .post('/api/auctions/999/bid')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ campaignId: 1, amountStroops: 150 });
+
+            expect(response.status).toBe(404);
+            expect(response.body.error).toBe('Auction not found');
+        });
+
+        it('should return 400 when auction is not open', async () => {
+            (pool.query as any).mockResolvedValueOnce({
+                rows: [{ publisher: otherAddress, floor_price_stroops: '100', status: 'Closed' }]
+            });
+
+            const response = await request(app)
+                .post('/api/auctions/1/bid')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ campaignId: 1, amountStroops: 150 });
+
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('Auction is not open for bidding');
+        });
+
+        it('should return 403 when bidding on own auction', async () => {
+            (pool.query as any).mockResolvedValueOnce({
+                rows: [{ publisher: mockAddress, floor_price_stroops: '100', status: 'Open' }]
+            });
+
+            const response = await request(app)
+                .post('/api/auctions/1/bid')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ campaignId: 1, amountStroops: 150 });
+
+            expect(response.status).toBe(403);
+            expect(response.body.error).toBe('Cannot bid on your own auction');
+        });
+
+        it('should return 400 when bid is below floor price', async () => {
+            (pool.query as any).mockResolvedValueOnce({
+                rows: [{ publisher: otherAddress, floor_price_stroops: '200', status: 'Open' }]
+            });
+
+            const response = await request(app)
+                .post('/api/auctions/1/bid')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ campaignId: 1, amountStroops: 100 });
+
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('Bid below floor price');
+        });
+
+        it('should return 404 when campaign does not exist', async () => {
+            (pool.query as any)
+                .mockResolvedValueOnce({
+                    rows: [{ publisher: otherAddress, floor_price_stroops: '100', status: 'Open' }]
+                })
+                .mockResolvedValueOnce({ rows: [] });
+
+            const response = await request(app)
+                .post('/api/auctions/1/bid')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ campaignId: 999, amountStroops: 150 });
+
+            expect(response.status).toBe(404);
+            expect(response.body.error).toBe('Campaign not found');
+        });
+
+        it('should return 403 when campaign belongs to another user', async () => {
+            (pool.query as any)
+                .mockResolvedValueOnce({
+                    rows: [{ publisher: otherAddress, floor_price_stroops: '100', status: 'Open' }]
+                })
+                .mockResolvedValueOnce({
+                    rows: [{ advertiser: otherAddress }]
+                });
+
+            const response = await request(app)
+                .post('/api/auctions/1/bid')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ campaignId: 1, amountStroops: 150 });
+
+            expect(response.status).toBe(403);
+            expect(response.body.error).toBe('Campaign does not belong to you');
         });
     });
 });

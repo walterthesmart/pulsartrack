@@ -39,14 +39,18 @@ describe('Publisher Routes', () => {
                 website: 'https://newpub.com'
             };
 
-            (pool.query as any).mockResolvedValue({
-                rows: [{
-                    id: 'pub-uuid',
-                    address: mockAddress,
-                    display_name: pubData.displayName,
-                    website: pubData.website
-                }]
-            });
+            (pool.query as any)
+                // Duplicate check
+                .mockResolvedValueOnce({ rows: [] })
+                // Insert
+                .mockResolvedValueOnce({
+                    rows: [{
+                        id: 'pub-uuid',
+                        address: mockAddress,
+                        display_name: pubData.displayName,
+                        website: pubData.website
+                    }]
+                });
 
             const response = await request(app)
                 .post('/api/publishers/register')
@@ -63,6 +67,20 @@ describe('Publisher Routes', () => {
                 .send({ displayName: 'Anon' });
 
             expect(response.status).toBe(401);
+        });
+
+        it('should return 409 when publisher already registered', async () => {
+            (pool.query as any).mockResolvedValueOnce({
+                rows: [{ id: 'existing-uuid' }]
+            });
+
+            const response = await request(app)
+                .post('/api/publishers/register')
+                .set('Authorization', `Bearer ${token}`)
+                .send({ displayName: 'Duplicate', website: 'https://dup.com' });
+
+            expect(response.status).toBe(409);
+            expect(response.body.error).toBe('Publisher already registered');
         });
     });
 });
