@@ -61,12 +61,18 @@ router.get('/leaderboard', validate({
 router.post('/register', requireAuth, validate({
   body: {
     displayName: { type: 'string', required: true, minLength: 1, maxLength: 100 },
-    website: { type: 'string', maxLength: 500 },
+    website: { type: 'string', maxLength: 500, format: 'url' },
   },
 }), async (req: Request, res: Response) => {
   try {
     const address = (req as any).stellarAddress;
     const { displayName, website } = req.body;
+
+    // Check if the address is already registered
+    const existing = await pool.query('SELECT id FROM publishers WHERE address = $1', [address]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Publisher already registered' });
+    }
 
     const { rows } = await pool.query(
       `INSERT INTO publishers (address, display_name, website)
