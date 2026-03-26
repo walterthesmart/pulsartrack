@@ -513,3 +513,126 @@ fn test_is_active_returns_false_after_expiry() {
         .set_timestamp(env.ledger().timestamp() + MONTHLY_SECS + 1);
     assert!(!c.is_active(&subscriber));
 }
+
+// ============================================================
+// auto_renew_subscription()
+// ============================================================
+
+#[test]
+fn test_auto_renew_extends_expiry_from_old_expires_at() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+    let (c, _, _, token, _) = setup(&env);
+    let subscriber = Address::generate(&env);
+    // Fund for initial subscription + renewal
+    mint(&env, &token, &subscriber, STARTER_MONTHLY * 2);
+
+    c.subscribe(&subscriber, &SubscriptionTier::Starter, &false, &true);
+    let original_expiry = c.get_subscription(&subscriber).unwrap().expires_at;
+
+    // Advance just past expiry
+    env.ledger().set_timestamp(original_expiry + 1);
+
+    c.auto_renew_subscription(&subscriber);
+
+    let sub = c.get_subscription(&subscriber).unwrap();
+    // New expiry = original_expiry.max(now) + MONTHLY_SECS = original_expiry + 1 + MONTHLY_SECS
+    // since now (original_expiry + 1) > original_expiry
+    assert_eq!(sub.expires_at, original_expiry + 1 + MONTHLY_SECS);
+    assert!(c.is_active(&subscriber));
+}
+
+#[test]
+fn test_auto_renew_charges_correct_amount() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+    let (c, _, _, token, treasury) = setup(&env);
+    let subscriber = Address::generate(&env);
+    mint(&env, &token, &subscriber, STARTER_MONTHLY * 2);
+
+    c.subscribe(&subscriber, &SubscriptionTier::Starter, &false, &true);
+    let original_expiry = c.get_subscription(&subscriber).unwrap().expires_at;
+    env.ledger().set_timestamp(original_expiry + 1);
+
+    let treasury_before = balance(&env, &token, &treasury);
+    c.auto_renew_subscription(&subscriber);
+    let charged = balance(&env, &token, &treasury) - treasury_before;
+
+    assert_eq!(charged, STARTER_MONTHLY);
+}
+
+#[test]
+#[should_panic(expected = "auto renew not enabled")]
+fn test_auto_renew_panics_when_flag_is_false() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, _, token, _) = setup(&env);
+    let subscriber = Address::generate(&env);
+    mint(&env, &token, &subscriber, STARTER_MONTHLY * 2);
+
+    // Subscribe with auto_renew = false
+    c.subscribe(&subscriber, &SubscriptionTier::Starter, &false, &false);
+    let expiry = c.get_subscription(&subscriber).unwrap().expires_at;
+    env.ledger().set_timestamp(expiry + 1);
+
+    c.auto_renew_subscription(&subscriber);
+}
+
+#[test]
+#[should_panic(expected = "subscription not yet expired")]
+fn test_auto_renew_panics_when_still_active() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, _, token, _) = setup(&env);
+    let subscriber = Address::generate(&env);
+    mint(&env, &token, &subscriber, STARTER_MONTHLY * 2);
+
+    c.subscribe(&subscriber, &SubscriptionTier::Starter, &false, &true);
+    // Don't advance time — subscription is still active
+    c.auto_renew_subscription(&subscriber);
+}
+
+#[test]
+#[should_panic(expected = "insufficient balance for auto-renewal")]
+fn test_auto_renew_panics_when_insufficient_balance() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, _, token, _) = setup(&env);
+    let subscriber = Address::generate(&env);
+    // Fund only enough for the initial subscription; nothing left for renewal
+    mint(&env, &token, &subscriber, STARTER_MONTHLY);
+
+    c.subscribe(&subscriber, &SubscriptionTier::Starter, &false, &true);
+    let expiry = c.get_subscription(&subscriber).unwrap().expires_at;
+    env.ledger().set_timestamp(expiry + 1);
+
+    c.auto_renew_subscription(&subscriber);
+}
+
+#[test]
+#[should_panic(expected = "no subscription found")]
+fn test_auto_renew_panics_when_no_subscription() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, ..) = setup(&env);
+    c.auto_renew_subscription(&Address::generate(&env));
+}
+
+#[test]
+#[should_panic(expected = "auto renew not enabled")]
+fn test_cancel_then_auto_renew_is_blocked() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, _, token, _) = setup(&env);
+    let subscriber = Address::generate(&env);
+    mint(&env, &token, &subscriber, STARTER_MONTHLY * 2);
+
+    c.subscribe(&subscriber, &SubscriptionTier::Starter, &false, &true);
+    c.cancel(&subscriber);
+
+    let expiry = c.get_subscription(&subscriber).unwrap().expires_at;
+    env.ledger().set_timestamp(expiry + 1);
+
+    // cancel() sets auto_renew = false, so auto_renew_subscription must panic
+    c.auto_renew_subscription(&subscriber);
+}
