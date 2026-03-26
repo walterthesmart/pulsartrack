@@ -61,7 +61,7 @@ export function CampaignForm({ onSuccess, onCancel }: CampaignFormProps) {
         dailyViewLimit: parseInt(data.dailyViewLimit),
         refundable: data.refundable ?? true,
       });
-      onSuccess?.(result as number);
+      onSuccess?.(result as unknown as number);
       reset();
     } catch (err: any) {
       setSubmitError(err?.message || "Failed to create campaign");
