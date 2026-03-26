@@ -41,7 +41,9 @@ router.get('/stats', async (_req: Request, res: Response) => {
       total_spent_xlm: Number(stats.total_spent_stroops) / 1e7,
     });
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to fetch campaign stats', details: err.message });
+    _req.log?.error({ err }, 'Failed to fetch campaign stats');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to fetch campaign stats', ...(details && { details }) });
   }
 });
 
@@ -66,7 +68,9 @@ router.post('/', requireAuth, validate({
 
     res.status(201).json(rows[0]);
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to create campaign', details: err.message });
+    req.log?.error({ err }, 'Failed to create campaign');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to create campaign', ...(details && { details }) });
   }
 });
 

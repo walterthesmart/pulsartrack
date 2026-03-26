@@ -65,7 +65,9 @@ router.get('/proposals', validate({
       totalOnChain: proposalCount,
     });
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to fetch governance proposals', details: err.message });
+    req.log?.error({ err }, 'Failed to fetch governance proposals');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to fetch governance proposals', ...(details && { details }) });
   }
 });
 

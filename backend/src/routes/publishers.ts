@@ -52,7 +52,9 @@ router.get('/leaderboard', validate({
 
     res.json({ publishers });
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to fetch publisher leaderboard', details: err.message });
+    req.log?.error({ err }, 'Failed to fetch publisher leaderboard');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to fetch publisher leaderboard', ...(details && { details }) });
   }
 });
 
@@ -74,7 +76,9 @@ router.post('/register', requireAuth, validate({
 
     res.status(201).json(rows[0]);
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to register publisher', details: err.message });
+    req.log?.error({ err }, 'Failed to register publisher');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to register publisher', ...(details && { details }) });
   }
 });
 

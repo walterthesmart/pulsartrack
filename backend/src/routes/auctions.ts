@@ -69,9 +69,9 @@ router.get(
         total: onChainTotal ?? auctions.length,
       });
     } catch (err: any) {
-      res
-        .status(500)
-        .json({ error: "Failed to fetch auctions", details: err.message });
+      req.log?.error({ err }, 'Failed to fetch auctions');
+      const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+      res.status(500).json({ error: "Failed to fetch auctions", ...(details && { details }) });
     }
   },
 );
@@ -107,9 +107,9 @@ router.post(
 
       res.status(201).json(rows[0]);
     } catch (err: any) {
-      res
-        .status(500)
-        .json({ error: "Failed to submit bid", details: err.message });
+      req.log?.error({ err }, 'Failed to submit bid');
+      const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+      res.status(500).json({ error: "Failed to submit bid", ...(details && { details }) });
     }
   },
 );
