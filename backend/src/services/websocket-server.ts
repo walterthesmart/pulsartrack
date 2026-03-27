@@ -33,11 +33,7 @@ const clients = new Map<WebSocket, ClientState>();
 const connectionsPerIp = new Map<string, number>();
 const MAX_CONNECTIONS_PER_IP = 5;
 
-const INITIAL_BACKOFF_MS = 1000;
-const MAX_BACKOFF_MS = 30000;
-let currentBackoff = INITIAL_BACKOFF_MS;
 let stopStream: (() => void) | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 const JWT_SECRET =
   process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
@@ -84,7 +80,6 @@ function parseClientMessage(raw: string): ClientMessage | null {
 function startLedgerStream(): void {
   stopStream = streamLedgers(
     (ledger) => {
-      currentBackoff = INITIAL_BACKOFF_MS;
       broadcastToChannel("ledger", {
         type: "LEDGER_CLOSED",
         payload: {
@@ -96,40 +91,16 @@ function startLedgerStream(): void {
       });
     },
     (err: any) => {
-      logger.error(err, "[WS] Ledger stream error");
-      scheduleReconnect();
+      logger.error(err, "[WS] Ledger stream error notified");
+      broadcastToChannel("ledger", {
+        type: "reconnecting",
+        payload: {
+          message: "Horizon stream dropped, reconnecting build-in...",
+        },
+        timestamp: Date.now(),
+      });
     },
   );
-}
-
-function scheduleReconnect(): void {
-  if (reconnectTimer) return;
-
-  broadcastToChannel("ledger", {
-    type: "reconnecting",
-    payload: {
-      message: "Horizon stream dropped, reconnecting...",
-      retryMs: currentBackoff,
-    },
-    timestamp: Date.now(),
-  });
-
-  logger.info(`[WS] Reconnecting in ${currentBackoff}ms...`);
-
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    if (stopStream) {
-      try { stopStream(); } catch { /* already closed */ }
-      stopStream = null;
-    }
-    startLedgerStream();
-    broadcastToChannel("ledger", {
-      type: "reconnected",
-      payload: { message: "Horizon stream resumed" },
-      timestamp: Date.now(),
-    });
-    currentBackoff = Math.min(currentBackoff * 2, MAX_BACKOFF_MS);
-  }, currentBackoff);
 }
 
 export function setupWebSocketServer(server: Server): WebSocketServer {
@@ -231,7 +202,6 @@ export function setupWebSocketServer(server: Server): WebSocketServer {
   startLedgerStream();
 
   wss.on("close", () => {
-    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (stopStream) { stopStream(); stopStream = null; }
   });
 

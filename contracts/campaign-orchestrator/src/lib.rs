@@ -376,6 +376,22 @@ impl CampaignOrchestratorContract {
 
         if campaign.current_views >= campaign.target_views {
             campaign.status = CampaignStatus::Completed;
+            
+            // Decrement active campaigns count for advertiser
+            let stats_key = DataKey::AdvertiserStats(campaign.advertiser.clone());
+            if let Some(mut stats) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, AdvertiserStats>(&stats_key)
+            {
+                stats.active_campaigns = stats.active_campaigns.saturating_sub(1);
+                env.storage().persistent().set(&stats_key, &stats);
+                env.storage().persistent().extend_ttl(
+                    &stats_key,
+                    PERSISTENT_LIFETIME_THRESHOLD,
+                    PERSISTENT_BUMP_AMOUNT,
+                );
+            }
         }
 
         let _ttl_key = DataKey::Campaign(campaign_id);
@@ -433,6 +449,27 @@ impl CampaignOrchestratorContract {
             panic!("unauthorized");
         }
 
+        // Only decrement stats if it was active
+        match campaign.status {
+            CampaignStatus::Active => {
+                let stats_key = DataKey::AdvertiserStats(advertiser.clone());
+                if let Some(mut stats) = env
+                    .storage()
+                    .persistent()
+                    .get::<DataKey, AdvertiserStats>(&stats_key)
+                {
+                    stats.active_campaigns = stats.active_campaigns.saturating_sub(1);
+                    env.storage().persistent().set(&stats_key, &stats);
+                    env.storage().persistent().extend_ttl(
+                        &stats_key,
+                        PERSISTENT_LIFETIME_THRESHOLD,
+                        PERSISTENT_BUMP_AMOUNT,
+                    );
+                }
+            }
+            _ => {}
+        }
+
         campaign.status = CampaignStatus::Paused;
         campaign.last_updated = env.ledger().timestamp();
         let _ttl_key = DataKey::Campaign(campaign_id);
@@ -459,6 +496,27 @@ impl CampaignOrchestratorContract {
 
         if campaign.advertiser != advertiser {
             panic!("unauthorized");
+        }
+
+        // Only increment stats if it was paused
+        match campaign.status {
+            CampaignStatus::Paused => {
+                let stats_key = DataKey::AdvertiserStats(advertiser.clone());
+                if let Some(mut stats) = env
+                    .storage()
+                    .persistent()
+                    .get::<DataKey, AdvertiserStats>(&stats_key)
+                {
+                    stats.active_campaigns += 1;
+                    env.storage().persistent().set(&stats_key, &stats);
+                    env.storage().persistent().extend_ttl(
+                        &stats_key,
+                        PERSISTENT_LIFETIME_THRESHOLD,
+                        PERSISTENT_BUMP_AMOUNT,
+                    );
+                }
+            }
+            _ => panic!("campaign not paused"),
         }
 
         campaign.status = CampaignStatus::Active;
