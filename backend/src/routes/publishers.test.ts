@@ -43,14 +43,18 @@ describe('Publisher Routes', () => {
                 website: 'https://newpub.com'
             };
 
-            (pool.query as any).mockResolvedValueOnce({
-                rows: [{
-                    id: 'pub-uuid',
-                    address: mockAddress,
-                    display_name: pubData.displayName,
-                    website: pubData.website
-                }]
-            });
+            // First call: SELECT duplicate check (no existing publisher)
+            // Second call: INSERT returning new publisher row
+            (pool.query as any)
+                .mockResolvedValueOnce({ rows: [] })
+                .mockResolvedValueOnce({
+                    rows: [{
+                        id: 'pub-uuid',
+                        address: mockAddress,
+                        display_name: pubData.displayName,
+                        website: pubData.website
+                    }]
+                });
 
             const response = await request(app)
                 .post('/api/publishers/register')

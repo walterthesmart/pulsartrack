@@ -52,11 +52,16 @@ describe('Auction Routes', () => {
                 amount_stroops: bidData.amountStroops
             };
 
-            // First call: INSERT returning the new bid row
-            // Second call: UPDATE bid_count (returns rowCount only)
-            (pool.query as any)
-                .mockResolvedValueOnce({ rows: [insertRow] })
-                .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+            // Route uses pool.connect() for a transaction — mock the client
+            const mockClient = {
+                query: vi.fn()
+                    .mockResolvedValueOnce({ rows: [] })                  // BEGIN
+                    .mockResolvedValueOnce({ rows: [insertRow] })         // INSERT
+                    .mockResolvedValueOnce({ rows: [], rowCount: 1 })     // UPDATE
+                    .mockResolvedValueOnce({ rows: [] }),                 // COMMIT
+                release: vi.fn(),
+            };
+            (pool.connect as any).mockResolvedValue(mockClient);
 
             const response = await request(app)
                 .post('/api/auctions/1/bid')
