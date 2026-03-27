@@ -18,6 +18,7 @@ import { checkDbConnection } from "./config/database";
 import { validateContractIds } from "./config/stellar";
 import prisma from "./db/prisma";
 import redisClient from "./config/redis";
+import { validateSimulationAccount } from "./services/soroban-client";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "4000", 10);
@@ -85,6 +86,9 @@ setupWebSocketServer(server);
 async function start() {
   // Validate contract IDs — throws in production, warns in development
   validateContractIds();
+  
+  // Validate simulation account
+  await validateSimulationAccount();
 
   // Verify database connection — fail hard in production
   const dbOk = await checkDbConnection();

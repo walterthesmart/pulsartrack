@@ -46,7 +46,7 @@ export function useAnalyticsTimeseries({ campaignIds, timeframe }: UseAnalyticsT
     return () => {
       controller.abort();
     };
-  }, [campaignIds, timeframe]);
+  }, [campaignIds.join(','), timeframe]);
 
   return { data, loading, error };
 }

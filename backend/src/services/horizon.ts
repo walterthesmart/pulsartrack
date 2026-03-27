@@ -45,22 +45,50 @@ export async function getAccountTransactions(address: string, limit = 20) {
 }
 
 /**
- * Stream ledger events for contract activity
+ * Stream ledger events for contract activity with automatic reconnection
  */
 export function streamLedgers(
   onLedger: (ledger: any) => void,
   onError?: (err: any) => void
 ): () => void {
   const server = createHorizonServer();
-  const es = server
-    .ledgers()
-    .cursor('now')
-    .stream({
-      onmessage: onLedger,
-      onerror: onError,
-    });
+  let reconnectDelay = 1000;
+  let isClosed = false;
+  let es: any = null;
 
-  return () => (es as any)?.close?.();
+  function connect() {
+    if (isClosed) return;
+
+    es = server
+      .ledgers()
+      .cursor('now')
+      .stream({
+        onmessage: (ledger) => {
+          reconnectDelay = 1000; // Reset on success
+          onLedger(ledger);
+        },
+        onerror: (err) => {
+          logger.error({ err }, '[Horizon] Stream error, reconnecting...');
+          es?.close?.();
+          
+          if (onError) {
+            onError(err);
+          }
+
+          if (!isClosed) {
+            setTimeout(connect, reconnectDelay);
+            reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+          }
+        },
+      });
+  }
+
+  connect();
+
+  return () => {
+    isClosed = true;
+    es?.close?.();
+  };
 }
 
 /**
