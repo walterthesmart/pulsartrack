@@ -67,7 +67,7 @@ describe('Auction Routes', () => {
             expect(response.status).toBe(201);
             expect(response.body.auction_id).toBe(1);
             expect(response.body.amount_stroops).toBe(150);
-            expect(client.query).toHaveBeenCalledTimes(3);
+            expect(client.query).toHaveBeenCalledTimes(4);
             expect(client.release).toHaveBeenCalled();
         });
 
