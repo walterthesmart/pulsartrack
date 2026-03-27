@@ -115,8 +115,13 @@ impl AnalyticsAggregatorContract {
         analytics.last_updated = env.ledger().timestamp();
 
         if analytics.total_impressions > 0 {
-            analytics.ctr = (analytics.total_clicks * 10_000 / analytics.total_impressions) as u32;
-            analytics.cpm = (analytics.total_spend * 1_000) / analytics.total_impressions as i128;
+            // Use u128 for CTR calculation and clamp to 10,000 (100%)
+            analytics.ctr = ((analytics.total_clicks as u128 * 10_000 / analytics.total_impressions as u128) as u32).min(10_000);
+            // Use checked/saturating arithmetic for CPM
+            analytics.cpm = (analytics.total_spend as i128)
+                .saturating_mul(1_000)
+                .checked_div(analytics.total_impressions as i128)
+                .unwrap_or(0);
         }
 
         let _ttl_key = DataKey::CampaignAnalytics(campaign_id);
@@ -166,7 +171,7 @@ impl AnalyticsAggregatorContract {
 
         analytics.total_clicks += 1;
         if analytics.total_impressions > 0 {
-            analytics.ctr = (analytics.total_clicks * 10_000 / analytics.total_impressions) as u32;
+            analytics.ctr = ((analytics.total_clicks as u128 * 10_000 / analytics.total_impressions as u128) as u32).min(10_000);
         }
         analytics.last_updated = env.ledger().timestamp();
 

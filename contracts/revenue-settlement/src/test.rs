@@ -60,6 +60,7 @@ fn test_initialize() {
 
     let pool = client.get_revenue_pool();
     assert_eq!(pool.total_revenue, 0);
+    assert_eq!(pool.total_burned, 0);
     assert_eq!(pool.platform_pct, 250);
     assert_eq!(pool.publisher_pct, 9_000);
     assert_eq!(pool.treasury_pct, 500);
@@ -199,12 +200,48 @@ fn test_distribute_platform_revenue() {
     assert_eq!(tc.balance(&treasury), 5_000); // treasury share
     assert_eq!(tc.balance(&contract_id), 9_990_000); // includes 2_500 burn from 10_000_000 funding
 
-    // Pool should be reset for platform, treasury, and burn
+    // Pool should be reset for platform, treasury, and burn; total_burned accumulates
     let pool = client.get_revenue_pool();
     assert_eq!(pool.platform_share, 0);
     assert_eq!(pool.treasury_share, 0);
     assert_eq!(pool.burn_amount, 0);
+    assert_eq!(pool.total_burned, 2_500); // 2.5% of 100_000 burned on-chain
     assert_eq!(pool.last_settlement, 1000);
+}
+
+#[test]
+fn test_total_burned_accumulates_across_distributions() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token_addr = deploy_token(&env, &token_admin);
+    let treasury = Address::generate(&env);
+    let platform = Address::generate(&env);
+
+    let contract_id = env.register_contract(None, RevenueSettlementContract);
+    let client = RevenueSettlementContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &token_addr, &treasury, &platform);
+    mint(&env, &token_addr, &contract_id, 10_000_000);
+
+    let publisher = Address::generate(&env);
+
+    // First distribution — burn 2_500 (2.5% of 100_000)
+    client.record_revenue(&admin, &1u64, &100_000i128, &publisher);
+    client.distribute_platform_revenue(&admin);
+
+    let pool_after_first = client.get_revenue_pool();
+    assert_eq!(pool_after_first.burn_amount, 0);   // cleared after burn
+    assert_eq!(pool_after_first.total_burned, 2_500); // recorded cumulatively
+
+    // Second distribution — burn another 2_500
+    client.record_revenue(&admin, &2u64, &100_000i128, &publisher);
+    client.distribute_platform_revenue(&admin);
+
+    let pool_after_second = client.get_revenue_pool();
+    assert_eq!(pool_after_second.burn_amount, 0);
+    assert_eq!(pool_after_second.total_burned, 5_000); // 2_500 + 2_500
 }
 
 #[test]

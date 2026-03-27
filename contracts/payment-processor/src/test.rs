@@ -1,7 +1,7 @@
 #![cfg(test)]
 use super::*;
 use soroban_sdk::{
-    testutils::Address as _,
+    testutils::{Address as _, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
     Address, Env,
 };
@@ -339,6 +339,46 @@ fn test_payment_daily_limit_exceeded() {
 
     client.process_payment(&payer, &recipient, &token_addr, &10_000i128);
     client.process_payment(&payer, &recipient, &token_addr, &10_000i128); // 20_000 > 15_000
+}
+
+#[test]
+fn test_daily_volume_ttl_covers_remaining_day() {
+    let env = Env::default();
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = 86_399;
+    });
+    assert_eq!(PaymentProcessorContract::daily_volume_ttl_ledgers(&env), 1);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = 43_200;
+    });
+    assert_eq!(
+        PaymentProcessorContract::daily_volume_ttl_ledgers(&env),
+        8_641
+    );
+}
+
+#[test]
+fn test_daily_limit_resets_on_next_day() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, _, token_admin, token_addr) = setup(&env);
+    client.add_token(&admin, &token_addr, &1_000i128, &15_000i128);
+
+    let payer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    mint(&env, &token_addr, &token_admin, &payer, 1_000_000);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = 1;
+    });
+    client.process_payment(&payer, &recipient, &token_addr, &10_000i128);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = 86_401;
+    });
+    client.process_payment(&payer, &recipient, &token_addr, &10_000i128);
 }
 
 // ─── set_platform_fee ────────────────────────────────────────────────────────

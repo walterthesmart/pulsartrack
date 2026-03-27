@@ -1,4 +1,10 @@
-import { Networks } from '@stellar/stellar-sdk';
+// Network passphrases — copied from @stellar/stellar-sdk Networks to avoid
+// importing the full Node.js SDK bundle in a shared config file.
+const StellarNetworks = {
+  PUBLIC: 'Public Global Stellar Network ; September 2015',
+  TESTNET: 'Test SDF Network ; September 2015',
+  FUTURENET: 'Test SDF Future Network ; October 2022',
+} as const;
 
 /**
  * Network Configuration for PulsarTrack on Stellar
@@ -6,22 +12,22 @@ import { Networks } from '@stellar/stellar-sdk';
 
 export const NETWORKS = {
   mainnet: {
-    network: Networks.PUBLIC,
+    network: StellarNetworks.PUBLIC,
     horizonUrl: 'https://horizon.stellar.org',
     sorobanRpcUrl: 'https://mainnet.sorobanrpc.com',
-    passphrase: Networks.PUBLIC,
+    passphrase: StellarNetworks.PUBLIC,
   },
   testnet: {
-    network: Networks.TESTNET,
+    network: StellarNetworks.TESTNET,
     horizonUrl: 'https://horizon-testnet.stellar.org',
     sorobanRpcUrl: 'https://soroban-testnet.stellar.org',
-    passphrase: Networks.TESTNET,
+    passphrase: StellarNetworks.TESTNET,
   },
   futurenet: {
-    network: Networks.FUTURENET,
+    network: StellarNetworks.FUTURENET,
     horizonUrl: 'https://horizon-futurenet.stellar.org',
     sorobanRpcUrl: 'https://rpc-futurenet.stellar.org',
-    passphrase: Networks.FUTURENET,
+    passphrase: StellarNetworks.FUTURENET,
   },
 } as const;
 

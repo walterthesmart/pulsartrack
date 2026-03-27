@@ -105,6 +105,36 @@ fn test_pause_resume_campaign() {
 }
 
 #[test]
+fn test_cancel_campaign_decrements_active_campaigns() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, _, token) = setup(&env);
+    let advertiser = Address::generate(&env);
+    mint(&env, &token, &advertiser, 5_000_000);
+
+    let id = c.create_campaign(
+        &advertiser,
+        &1u32,
+        &1_000_000i128,
+        &100i128,
+        &1000u32,
+        &10_000u64,
+        &5_000u64,
+        &true,
+    );
+
+    let stats_before = c.get_advertiser_stats(&advertiser).unwrap();
+    assert_eq!(stats_before.total_campaigns, 1);
+    assert_eq!(stats_before.active_campaigns, 1);
+
+    c.cancel_campaign(&advertiser, &id);
+
+    let stats_after = c.get_advertiser_stats(&advertiser).unwrap();
+    assert_eq!(stats_after.total_campaigns, 1);
+    assert_eq!(stats_after.active_campaigns, 0);
+}
+
+#[test]
 fn test_set_platform_fee() {
     let env = Env::default();
     env.mock_all_auths();

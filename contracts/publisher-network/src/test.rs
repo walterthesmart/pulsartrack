@@ -144,6 +144,7 @@ fn test_deactivate() {
     assert!(!node.is_active);
     let stats = c.get_network_stats();
     assert_eq!(stats.active_nodes, 0);
+    assert_eq!(stats.total_capacity, 0);
 }
 
 #[test]

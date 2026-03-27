@@ -177,6 +177,9 @@ impl LiquidityPoolContract {
             .get(&DataKey::TotalShares)
             .unwrap_or(0);
 
+        if total_shares == 0 {
+            panic!("no shares in pool");
+        }
         let amount = (shares * pool.total_liquidity) / total_shares;
         let available = pool.total_liquidity - pool.total_borrowed;
 
@@ -234,7 +237,9 @@ impl LiquidityPoolContract {
         }
 
         pool.total_borrowed += amount;
-        pool.utilization_rate = ((pool.total_borrowed * 100) / pool.total_liquidity) as u32;
+        if pool.total_liquidity > 0 {
+            pool.utilization_rate = ((pool.total_borrowed * 100) / pool.total_liquidity) as u32;
+        }
         pool.last_updated = env.ledger().timestamp();
         env.storage().instance().set(&DataKey::PoolState, &pool);
 
@@ -356,12 +361,15 @@ impl LiquidityPoolContract {
         let principal_repaid = borrow.borrowed;
         let interest_paid = borrow.interest_accrued;
         let overpayment = amount.saturating_sub(total_owed);
-        
+
         // Reduce total_borrowed by principal repaid
         pool.total_borrowed -= principal_repaid;
-        
-        // Interest goes to separate reserve (not added to total_liquidity)
-        pool.interest_reserve += interest_paid;
+
+        // Split interest: reserve_factor% → protocol reserve, rest → lenders (via total_liquidity)
+        let protocol_share = (interest_paid * pool.reserve_factor as i128) / 100;
+        let lender_share = interest_paid - protocol_share;
+        pool.interest_reserve += protocol_share;
+        pool.total_liquidity += lender_share;
         
         if pool.total_liquidity > 0 {
             pool.utilization_rate = ((pool.total_borrowed * 100) / pool.total_liquidity) as u32;

@@ -116,41 +116,42 @@ fn test_get_borrow_nonexistent() {
 }
 
 #[test]
-fn test_repay_with_interest_no_inflation() {
+fn test_repay_with_interest_distributes_yield() {
     let env = Env::default();
     env.mock_all_auths();
     let (c, _, _, token) = setup(&env);
     let provider = Address::generate(&env);
     let borrower = Address::generate(&env);
-    
+
     mint(&env, &token, &provider, 1_000_000);
     mint(&env, &token, &borrower, 1_000_000);
-    
+
     // Provider deposits 500,000
     c.deposit(&provider, &500_000i128);
     let pool_after_deposit = c.get_pool_state();
     assert_eq!(pool_after_deposit.total_liquidity, 500_000);
-    
+
     // Borrower borrows 100,000
     c.borrow(&borrower, &1u64, &100_000i128, &86_400u64);
     let pool_after_borrow = c.get_pool_state();
     assert_eq!(pool_after_borrow.total_liquidity, 500_000);
     assert_eq!(pool_after_borrow.total_borrowed, 100_000);
-    
+
     // Advance time by 1 year to accrue interest
     env.ledger().with_mut(|li| {
         li.timestamp += 31_557_600;
     });
-    
+
     // Borrower repays with interest
     c.repay(&borrower, &1u64, &110_000i128);
     let pool_after_repay = c.get_pool_state();
-    
-    // total_liquidity should remain unchanged
-    assert_eq!(pool_after_repay.total_liquidity, 500_000);
+
+    // Interest ~5,000 at 5% on 100k. With reserve_factor=10%:
+    // - protocol reserve gets ~500 (10%)
+    // - lenders get ~4,500 (90%) added to total_liquidity
     assert_eq!(pool_after_repay.total_borrowed, 0);
-    // Interest should be in reserve (approximately 5,000)
-    assert!(pool_after_repay.interest_reserve >= 4_900 && pool_after_repay.interest_reserve <= 5_100);
+    assert!(pool_after_repay.total_liquidity >= 504_400 && pool_after_repay.total_liquidity <= 504_600);
+    assert!(pool_after_repay.interest_reserve >= 490 && pool_after_repay.interest_reserve <= 510);
 }
 
 #[test]
@@ -170,10 +171,10 @@ fn test_repay_principal_only() {
     // Repay immediately (minimal time elapsed, negligible interest)
     c.repay(&borrower, &1u64, &100_000i128);
     let pool = c.get_pool_state();
-    
-    assert_eq!(pool.total_liquidity, 500_000);
+
+    // With negligible time elapsed, interest ~0, so liquidity stays ~500,000
+    assert!(pool.total_liquidity >= 500_000 && pool.total_liquidity <= 500_010);
     assert_eq!(pool.total_borrowed, 0);
-    // Interest should be minimal (close to 0)
     assert!(pool.interest_reserve < 10);
 }
 
@@ -207,19 +208,22 @@ fn test_multiple_borrows_with_interest() {
     });
     
     // First borrower repays with interest (~5% of 100k = ~5k)
+    // 10% reserve → ~500 to protocol, ~4500 to lenders
     c.repay(&borrower1, &1u64, &110_000i128);
     let pool_after_first = c.get_pool_state();
-    assert_eq!(pool_after_first.total_liquidity, 500_000);
+    assert!(pool_after_first.total_liquidity >= 504_400 && pool_after_first.total_liquidity <= 504_600);
     assert_eq!(pool_after_first.total_borrowed, 150_000);
-    assert!(pool_after_first.interest_reserve >= 4_900 && pool_after_first.interest_reserve <= 5_100);
-    
+    assert!(pool_after_first.interest_reserve >= 490 && pool_after_first.interest_reserve <= 510);
+
     // Second borrower repays with interest (~5% of 150k = ~7.5k)
+    // 10% reserve → ~750 to protocol, ~6750 to lenders
     c.repay(&borrower2, &2u64, &160_000i128);
     let pool_after_second = c.get_pool_state();
-    assert_eq!(pool_after_second.total_liquidity, 500_000);
     assert_eq!(pool_after_second.total_borrowed, 0);
-    // Total interest should be ~12.5k (5k + 7.5k)
-    assert!(pool_after_second.interest_reserve >= 12_000 && pool_after_second.interest_reserve <= 13_000);
+    // Total lender yield: ~4500 + ~6750 = ~11,250 added to liquidity
+    assert!(pool_after_second.total_liquidity >= 511_000 && pool_after_second.total_liquidity <= 511_500);
+    // Total protocol reserve: ~500 + ~750 = ~1,250
+    assert!(pool_after_second.interest_reserve >= 1_200 && pool_after_second.interest_reserve <= 1_300);
 }
 
 #[test]
@@ -247,16 +251,16 @@ fn test_provider_shares_not_inflated_by_interest() {
     // Borrower repays with interest
     c.repay(&borrower, &1u64, &110_000i128);
     
-    // Provider's shares should still be worth the same as original deposit
+    // Provider's shares are now worth MORE than original deposit (yield earned)
     let pool = c.get_pool_state();
     let position = c.get_provider_position(&provider).unwrap();
-    
-    // Share value calculation: (shares * total_liquidity) / total_shares
-    // Should equal original deposit, not inflated by interest
+
+    // Share count unchanged, but total_liquidity grew by lender share of interest
     assert_eq!(position.shares, shares);
-    assert_eq!(pool.total_liquidity, 500_000); // Not inflated
-    // Interest tracked separately
-    assert!(pool.interest_reserve >= 4_900 && pool.interest_reserve <= 5_100);
+    // ~5000 interest, 90% → lenders = ~4500 added to total_liquidity
+    assert!(pool.total_liquidity >= 504_400 && pool.total_liquidity <= 504_600);
+    // Protocol reserve gets 10% = ~500
+    assert!(pool.interest_reserve >= 490 && pool.interest_reserve <= 510);
 }
 
 #[test]
@@ -276,12 +280,46 @@ fn test_repay_partial_amount() {
     // Repay immediately (no time elapsed, minimal interest)
     c.repay(&borrower, &1u64, &100_000i128);
     let pool = c.get_pool_state();
-    
+
     assert_eq!(pool.total_borrowed, 0);
-    assert_eq!(pool.total_liquidity, 500_000); // Unchanged
-    
+    // With negligible time elapsed, liquidity stays ~500,000
+    assert!(pool.total_liquidity >= 500_000 && pool.total_liquidity <= 500_010);
+
     // Borrow record should be removed
     assert!(c.get_borrow(&1u64).is_none());
+}
+
+#[test]
+#[should_panic(expected = "no shares in pool")]
+fn test_withdraw_when_total_shares_zero() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, _, token) = setup(&env);
+    let provider = Address::generate(&env);
+
+    // Deposit and then withdraw all shares so total_shares reaches 0
+    mint(&env, &token, &provider, 1_000_000);
+    let shares = c.deposit(&provider, &100_000i128);
+    c.withdraw(&provider, &shares);
+
+    // Pool now has total_shares == 0; attempting to withdraw 0 shares must panic
+    c.withdraw(&provider, &0i128);
+}
+
+#[test]
+fn test_borrow_utilization_rate_not_calculated_when_liquidity_zero() {
+    // When total_liquidity is 0, borrow() must not panic with division by zero.
+    // Any non-zero borrow amount is caught earlier by "insufficient liquidity",
+    // so we verify the borrow with amount=0 leaves utilization_rate unchanged.
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, _, _) = setup(&env);
+    let borrower = Address::generate(&env);
+
+    // No liquidity deposited; borrow 0 should succeed without dividing by zero
+    c.borrow(&borrower, &1u64, &0i128, &86_400u64);
+    let pool = c.get_pool_state();
+    assert_eq!(pool.utilization_rate, 0); // unchanged, no division attempted
 }
 
 #[test]
@@ -334,10 +372,13 @@ fn test_repay_with_accrued_interest() {
     
     // Repay with interest (100,000 + ~5,000)
     c.repay(&borrower, &1u64, &105_500i128);
-    
+
     let pool = c.get_pool_state();
     assert_eq!(pool.total_borrowed, 0);
-    assert!(pool.interest_reserve >= 4_900 && pool.interest_reserve <= 5_100);
+    // 10% of ~5000 interest → ~500 to protocol reserve
+    assert!(pool.interest_reserve >= 490 && pool.interest_reserve <= 510);
+    // 90% of ~5000 interest → ~4500 to lenders via total_liquidity
+    assert!(pool.total_liquidity >= 504_400 && pool.total_liquidity <= 504_600);
 }
 
 #[test]
@@ -416,8 +457,44 @@ fn test_repay_with_overpayment() {
     
     // Repay with overpayment (should return excess)
     c.repay(&borrower, &1u64, &110_000i128);
-    
+
     let pool = c.get_pool_state();
     assert_eq!(pool.total_borrowed, 0);
-    assert!(pool.interest_reserve >= 4_900 && pool.interest_reserve <= 5_100);
+    // Protocol reserve gets 10% of ~5000 = ~500
+    assert!(pool.interest_reserve >= 490 && pool.interest_reserve <= 510);
+    // Lenders get 90% of ~5000 = ~4500 added to liquidity
+    assert!(pool.total_liquidity >= 504_400 && pool.total_liquidity <= 504_600);
+}
+
+#[test]
+fn test_lender_earns_yield_on_withdrawal() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, _, token) = setup(&env);
+    let provider = Address::generate(&env);
+    let borrower = Address::generate(&env);
+
+    mint(&env, &token, &provider, 1_000_000);
+    mint(&env, &token, &borrower, 1_000_000);
+
+    // Provider deposits 500,000 and receives shares
+    let shares = c.deposit(&provider, &500_000i128);
+    assert_eq!(shares, 500_000); // 1:1 for first deposit
+
+    // Borrower borrows 100,000 for 1 year
+    c.borrow(&borrower, &1u64, &100_000i128, &31_557_600u64);
+
+    // Advance time by 1 year
+    env.ledger().with_mut(|li| {
+        li.timestamp += 31_557_600;
+    });
+
+    // Borrower repays with interest (~5,000)
+    c.repay(&borrower, &1u64, &110_000i128);
+
+    // Lender's shares now represent more value due to interest yield
+    // total_liquidity grew from 500,000 to ~504,500
+    // Withdrawing all shares should return ~504,500
+    let withdrawn = c.withdraw(&provider, &shares);
+    assert!(withdrawn >= 504_400 && withdrawn <= 504_600);
 }

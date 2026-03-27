@@ -506,6 +506,23 @@ impl CampaignOrchestratorContract {
             PERSISTENT_BUMP_AMOUNT,
         );
 
+        let stats_key = DataKey::AdvertiserStats(advertiser.clone());
+        if let Some(mut stats) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, AdvertiserStats>(&stats_key)
+        {
+            if stats.active_campaigns > 0 {
+                stats.active_campaigns -= 1;
+            }
+            env.storage().persistent().set(&stats_key, &stats);
+            env.storage().persistent().extend_ttl(
+                &stats_key,
+                PERSISTENT_LIFETIME_THRESHOLD,
+                PERSISTENT_BUMP_AMOUNT,
+            );
+        }
+
         if refund > 0 {
             let token_addr: Address = env
                 .storage()
