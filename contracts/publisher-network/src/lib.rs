@@ -237,6 +237,7 @@ impl PublisherNetworkContract {
         if stats.active_nodes > 0 {
             stats.active_nodes -= 1;
         }
+        stats.total_capacity = stats.total_capacity.saturating_sub(node.capacity);
         env.storage().instance().set(&DataKey::NetworkStats, &stats);
     }
 
