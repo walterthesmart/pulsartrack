@@ -67,11 +67,19 @@ class PulsarWebSocket {
   connect(): void {
     if (typeof window === 'undefined') return;
 
+    // Close any existing connection without triggering another reconnect cycle
+    if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.close();
+      this.ws = null;
+    }
+
     try {
       this.ws = new WebSocket(this.url);
 
       this.ws.onopen = () => {
         this.reconnectAttempts = 0;
+        this.reconnectDelay = 3000; // reset backoff on successful connection
         this.emit({ type: 'connected', data: {}, timestamp: Date.now() });
       };
 
@@ -103,8 +111,15 @@ class PulsarWebSocket {
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
 
+    // Clear any pending timer before scheduling a new one to prevent accumulation
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       this.reconnectAttempts++;
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000); // exponential backoff
       this.connect();
     }, this.reconnectDelay);
   }

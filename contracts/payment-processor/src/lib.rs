@@ -82,6 +82,8 @@ const INSTANCE_LIFETIME_THRESHOLD: u32 = 17_280;
 const INSTANCE_BUMP_AMOUNT: u32 = 86_400;
 const PERSISTENT_LIFETIME_THRESHOLD: u32 = 120_960;
 const PERSISTENT_BUMP_AMOUNT: u32 = 1_051_200;
+const SECONDS_PER_DAY: u64 = 86_400;
+const APPROX_SECONDS_PER_LEDGER: u64 = 5;
 
 #[contract]
 pub struct PaymentProcessorContract;
@@ -192,7 +194,7 @@ impl PaymentProcessorContract {
         }
 
         // Check daily limit
-        let current_day = env.ledger().timestamp() / 86_400;
+        let current_day = env.ledger().timestamp() / SECONDS_PER_DAY;
         let daily_key = DataKey::DailyVolume(token.clone(), current_day);
         let daily_vol: i128 = env.storage().temporary().get(&daily_key).unwrap_or(0);
 
@@ -266,6 +268,10 @@ impl PaymentProcessorContract {
         env.storage()
             .temporary()
             .set(&daily_key, &(daily_vol + amount));
+        let remaining_ledgers = Self::daily_volume_ttl_ledgers(&env);
+        env.storage()
+            .temporary()
+            .extend_ttl(&daily_key, remaining_ledgers, remaining_ledgers);
 
         // Update user stats
         Self::_update_user_stats(&env, &payer, amount);
@@ -383,6 +389,15 @@ impl PaymentProcessorContract {
             PERSISTENT_LIFETIME_THRESHOLD,
             PERSISTENT_BUMP_AMOUNT,
         );
+    }
+
+    fn daily_volume_ttl_ledgers(env: &Env) -> u32 {
+        let seconds_elapsed_today = env.ledger().timestamp() % SECONDS_PER_DAY;
+        let seconds_left_today = SECONDS_PER_DAY - seconds_elapsed_today;
+
+        // Keep the temporary daily-volume key alive through the end of the
+        // current day so the limit cannot reset early.
+        ((seconds_left_today / APPROX_SECONDS_PER_LEDGER) + 1) as u32
     }
 
     pub fn propose_admin(env: Env, current_admin: Address, new_admin: Address) {

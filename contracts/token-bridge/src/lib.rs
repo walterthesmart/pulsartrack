@@ -84,6 +84,9 @@ impl TokenBridgeContract {
         if admin != stored_admin {
             panic!("unauthorized");
         }
+        if max_daily_limit <= 0 {
+            panic!("max_daily_limit must be positive");
+        }
         let _ttl_key = DataKey::SupportedChain(chain);
         env.storage().persistent().set(&_ttl_key, &max_daily_limit);
         env.storage().persistent().extend_ttl(

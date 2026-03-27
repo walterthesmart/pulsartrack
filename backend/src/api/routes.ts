@@ -1,14 +1,11 @@
 import { Router, Request, Response } from "express";
-import {
-  getAccountDetails,
-  getAccountTransactions,
-  getFeeStats,
-} from "../services/horizon";
+import { getFeeStats } from "../services/horizon";
 import { stellarConfig, CONTRACT_IDS } from "../config/stellar";
 import campaignRoutes from "../routes/campaigns";
 import publisherRoutes from "../routes/publishers";
 import auctionRoutes from "../routes/auctions";
-import analyticsRoutes from "../routes/analytics";
+import governanceRoutes from "../routes/governance";
+import accountRoutes from "../routes/accounts";
 
 const router = Router();
 
@@ -58,48 +55,16 @@ router.get("/network", async (_req: Request, res: Response) => {
   }
 });
 
-// Account details
-router.get("/account/:address", async (req: Request, res: Response) => {
-  try {
-    const { address } = req.params;
-    const account = await getAccountDetails(address as string);
-    if (!account) {
-      return res.status(404).json({ error: "Account not found or not funded" });
-    }
-    res.json(account);
-  } catch (err: any) {
-    req.log?.error({ err }, 'Failed to fetch account details');
-    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
-    res.status(500).json({ error: 'Failed to fetch account details', ...(details && { details }) });
-  }
-});
-
-// Account transaction history
-router.get(
-  "/account/:address/transactions",
-  async (req: Request, res: Response) => {
-    try {
-      const { address } = req.params;
-      const limit = Math.min(parseInt(req.query.limit as string) || 20, 200);
-      const txs = await getAccountTransactions(address as string, limit);
-      res.json({ transactions: txs, count: txs.length });
-    } catch (err: any) {
-      req.log?.error({ err }, 'Failed to fetch account transactions');
-      const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
-      res.status(500).json({ error: 'Failed to fetch account transactions', ...(details && { details }) });
-    }
-  },
-);
-
 // List deployed contract IDs
 router.get("/contracts", (_req: Request, res: Response) => {
   res.json({ contracts: CONTRACT_IDS });
 });
 
 // Domain routes
+router.use("/account", accountRoutes);
 router.use("/campaigns", campaignRoutes);
 router.use("/publishers", publisherRoutes);
 router.use("/auctions", auctionRoutes);
-router.use("/governance", analyticsRoutes);
+router.use("/governance", governanceRoutes);
 
 export default router;

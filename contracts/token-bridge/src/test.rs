@@ -65,6 +65,24 @@ fn test_add_supported_chain_unauthorized() {
 }
 
 #[test]
+#[should_panic(expected = "max_daily_limit must be positive")]
+fn test_add_supported_chain_zero_limit() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, admin) = setup(&env);
+    c.add_supported_chain(&admin, &s(&env, "ethereum"), &0i128);
+}
+
+#[test]
+#[should_panic(expected = "max_daily_limit must be positive")]
+fn test_add_supported_chain_negative_limit() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, admin) = setup(&env);
+    c.add_supported_chain(&admin, &s(&env, "ethereum"), &-1i128);
+}
+
+#[test]
 fn test_get_deposit_nonexistent() {
     let env = Env::default();
     env.mock_all_auths();

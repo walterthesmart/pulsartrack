@@ -95,6 +95,41 @@ router.post(
       const auctionId = parseInt(req.params.auctionId as string);
       const { campaignId, amountStroops } = req.body;
 
+      // Verify auction exists and is open
+      const auctionResult = await client.query(
+        `SELECT publisher, floor_price_stroops, status FROM auctions WHERE auction_id = $1`,
+        [auctionId],
+      );
+      if (auctionResult.rows.length === 0) {
+        return res.status(404).json({ error: "Auction not found" });
+      }
+      const auction = auctionResult.rows[0];
+      if (auction.status !== "Open") {
+        return res.status(400).json({ error: "Auction is not open for bidding" });
+      }
+
+      // Prevent self-bidding
+      if (auction.publisher === address) {
+        return res.status(403).json({ error: "Cannot bid on your own auction" });
+      }
+
+      // Verify bid meets floor price
+      if (amountStroops < Number(auction.floor_price_stroops)) {
+        return res.status(400).json({ error: "Bid below floor price" });
+      }
+
+      // Verify campaign belongs to the bidder
+      const campaignResult = await client.query(
+        `SELECT advertiser FROM campaigns WHERE campaign_id = $1`,
+        [campaignId],
+      );
+      if (campaignResult.rows.length === 0) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+      if (campaignResult.rows[0].advertiser !== address) {
+        return res.status(403).json({ error: "Campaign does not belong to you" });
+      }
+
       await client.query('BEGIN');
 
       const { rows } = await client.query(

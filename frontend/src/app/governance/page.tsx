@@ -31,6 +31,14 @@ const STATUS_COLORS: Record<ProposalStatus, string> = {
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
+function toVotePercentage(votes: bigint, total: bigint) {
+  if (total === 0n) {
+    return 0;
+  }
+
+  return Number((votes * 10_000n) / total) / 100;
+}
+
 export default function GovernancePage() {
   const { address, isConnected } = useWalletStore();
   const [activeTab, setActiveTab] = useState<
@@ -152,18 +160,12 @@ export default function GovernancePage() {
                 </div>
               ) : proposals && proposals.length > 0 ? (
                 proposals.map((proposal) => {
-                  const total =
-                    (proposal.votes_for || 0n) +
-                    (proposal.votes_against || 0n) +
-                    (proposal.votes_abstain || 0n);
-                  const forPct =
-                    total > 0n
-                      ? Number(((proposal.votes_for || 0n) * 100n) / total)
-                      : 0;
-                  const againstPct =
-                    total > 0n
-                      ? Number(((proposal.votes_against || 0n) * 100n) / total)
-                      : 0;
+                  const votesFor = proposal.votes_for || 0n;
+                  const votesAgainst = proposal.votes_against || 0n;
+                  const votesAbstain = proposal.votes_abstain || 0n;
+                  const total = votesFor + votesAgainst + votesAbstain;
+                  const forPct = toVotePercentage(votesFor, total);
+                  const againstPct = toVotePercentage(votesAgainst, total);
 
                   return (
                     <div

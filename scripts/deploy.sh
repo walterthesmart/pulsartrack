@@ -56,8 +56,20 @@ if [ "$DRY_RUN" = false ]; then
   
   if [ "$NETWORK" = "testnet" ]; then
     echo "[Funding] Requesting testnet XLM from Friendbot..."
-    curl -s "https://friendbot.stellar.org?addr=$DEPLOYER_ADDRESS" > /dev/null || true
-    sleep 2
+    FUND_RESULT=$(curl -s -w "%{http_code}" "https://friendbot.stellar.org?addr=$DEPLOYER_ADDRESS")
+    if [ "${FUND_RESULT: -3}" != "200" ]; then
+      echo "[Warning] Friendbot request may have failed"
+    fi
+
+    echo "[Waiting] Confirming account is funded..."
+    for i in $(seq 1 30); do
+      if stellar keys show "$IDENTITY" --network "$NETWORK" 2>/dev/null | grep -q "sequence"; then
+        echo "[OK] Account funded"
+        break
+      fi
+      [ "$i" -eq 30 ] && echo "[Error] Account not funded after 60s" && exit 1
+      sleep 2
+    done
   fi
 else
   DEPLOYER_ADDRESS="DRY_RUN_ADDRESS"

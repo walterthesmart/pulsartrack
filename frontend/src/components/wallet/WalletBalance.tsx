@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Horizon } from '@stellar/stellar-sdk';
 import { getHorizonUrl } from '../../lib/stellar-config';
-import { formatXlm } from '../../lib/display-utils';
 import { useWalletStore } from '../../store/wallet-store';
 import { TrendingUp, RefreshCw } from 'lucide-react';
 
@@ -16,9 +14,10 @@ export function WalletBalance() {
     if (!address) return;
     setLoading(true);
     try {
-      const server = new Horizon.Server(getHorizonUrl());
-      const account = await server.loadAccount(address);
-      const xlm = account.balances.find((b) => b.asset_type === 'native');
+      const res = await fetch(`${getHorizonUrl()}/accounts/${address}`);
+      if (!res.ok) throw new Error('Account not found');
+      const data = await res.json();
+      const xlm = data.balances?.find((b: any) => b.asset_type === 'native');
       setXlmBalance(xlm ? parseFloat(xlm.balance).toFixed(2) : '0.00');
     } catch {
       setXlmBalance(null);

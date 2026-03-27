@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../app';
 import * as horizon from '../services/horizon';
@@ -13,6 +13,10 @@ vi.mock('../services/horizon', () => ({
 describe('GET /api/account/:address', () => {
     // Valid 56-character Stellar address
     const mockAddress = 'GA5W6GSR6G2CXP747U7S6ZPH5EALQY57V22K6YJSP2XYG47YJ3PGLRTI';
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
 
     it('should return 200 and account data for valid address', async () => {
         const mockAccount = {
@@ -46,5 +50,6 @@ describe('GET /api/account/:address', () => {
         expect(response.status).toBe(500);
         expect(response.body).toHaveProperty('error', 'Failed to fetch account details');
         expect(response.body).not.toHaveProperty('details');
+        expect(response.body).toHaveProperty('error', errorMsg);
     });
 });
