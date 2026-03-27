@@ -254,6 +254,7 @@ impl AuctionEngineContract {
     }
 
     pub fn settle_auction(env: Env, caller: Address, auction_id: u64) {
+        caller.require_auth();
         env.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);

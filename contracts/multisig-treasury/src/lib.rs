@@ -233,6 +233,12 @@ impl MultisigTreasuryContract {
             panic!("tx not approved");
         }
 
+        if env.ledger().timestamp() > tx.expires_at {
+            tx.status = TxStatus::Expired;
+            env.storage().persistent().set(&DataKey::Tx(tx_id), &tx);
+            panic!("transaction expired");
+        }
+
         let token_client = token::Client::new(&env, &tx.token);
         token_client.transfer(&env.current_contract_address(), &tx.recipient, &tx.amount);
 

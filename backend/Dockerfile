@@ -1,23 +1,21 @@
 # Backend Dockerfile - Multi-stage build for TypeScript Express API
-# Stage 1: Dependencies
+# Stage 1: Dependencies - Install everything for building
 FROM node:20-alpine AS deps
 WORKDIR /app
 
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install production dependencies only
-RUN npm ci --only=production && npm cache clean --force
+# Install all dependencies (development + production)
+RUN npm ci && npm cache clean --force
 
 # Stage 2: Builder
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* ./
-
-# Install all dependencies (including devDependencies)
-RUN npm ci
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
 
 # Copy source code
 COPY . .
@@ -35,12 +33,15 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 expressjs
 
-# Copy production dependencies from deps stage
+# Copy everything from builder to ensure we have dependencies for pruning
+COPY package.json ./
 COPY --from=deps /app/node_modules ./node_modules
+
+# Prune devDependencies for production
+RUN npm prune --production
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./package.json
 
 # Copy prisma schema if it exists
 COPY --from=builder /app/prisma ./prisma 2>/dev/null || true
@@ -57,3 +58,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 # Start the application
 CMD ["node", "dist/index.js"]
+

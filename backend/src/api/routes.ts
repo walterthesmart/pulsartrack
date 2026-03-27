@@ -49,7 +49,9 @@ router.get("/network", async (_req: Request, res: Response) => {
       feeStats: fees,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    _req.log?.error({ err }, 'Failed to fetch network info');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to fetch network info', ...(details && { details }) });
   }
 });
 

@@ -38,3 +38,7 @@ Thumbs.db
 
 # ── Deployment artifacts (populated after deploy) ────
 # deployments/ JSON files are intentionally tracked
+
+issue.md
+pr.md
+

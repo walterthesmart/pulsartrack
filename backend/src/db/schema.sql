@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================================
 CREATE TABLE IF NOT EXISTS campaigns (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  campaign_id BIGINT NOT NULL UNIQUE,
+  campaign_id BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
   advertiser VARCHAR(64) NOT NULL,
   title TEXT NOT NULL,
   content_id TEXT NOT NULL,

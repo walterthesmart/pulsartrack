@@ -3,11 +3,13 @@ import { Keypair } from "@stellar/stellar-sdk";
 import crypto from "crypto";
 import { RateLimiterRedis } from "rate-limiter-flexible";
 import type Redis from "ioredis";
+import redisClient from "../config/redis";
 
 const JWT_SECRET =
   process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
 const TOKEN_EXPIRY = 3600;
-const nonceStore = new Map<string, { nonce: string; expiresAt: number }>();
+const NONCE_TTL_SECONDS = 300; // 5 minutes
+const NONCE_KEY_PREFIX = "nonce:";
 
 function createJwt(payload: Record<string, any>): string {
   const header = Buffer.from(
@@ -39,7 +41,7 @@ function decodeJwt(token: string): Record<string, any> {
   return payload;
 }
 
-function getChallenge(req: Request, res: Response): void {
+async function getChallenge(req: Request, res: Response): Promise<void> {
   const address = req.query.address as string;
   if (!address) {
     res.status(400).json({ error: "Missing address parameter" });
@@ -54,20 +56,28 @@ function getChallenge(req: Request, res: Response): void {
   }
 
   const nonce = crypto.randomBytes(32).toString("hex");
-  nonceStore.set(address, { nonce, expiresAt: Date.now() + 5 * 60 * 1000 });
+  await redisClient.set(
+    `${NONCE_KEY_PREFIX}${address}`,
+    nonce,
+    "EX",
+    NONCE_TTL_SECONDS,
+  );
   res.json({ nonce });
 }
 
-export function verifySignature(req: Request, res: Response): void {
+export async function verifySignature(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const { address, signature } = req.body;
   if (!address || !signature) {
     res.status(400).json({ error: "Missing address or signature" });
     return;
   }
 
-  const stored = nonceStore.get(address);
-  if (!stored || stored.expiresAt < Date.now()) {
-    nonceStore.delete(address);
+  const key = `${NONCE_KEY_PREFIX}${address}`;
+  const nonce = await redisClient.get(key);
+  if (!nonce) {
     res.status(401).json({ error: "No valid challenge found" });
     return;
   }
@@ -75,7 +85,7 @@ export function verifySignature(req: Request, res: Response): void {
   try {
     const keypair = Keypair.fromPublicKey(address);
     const valid = keypair.verify(
-      Buffer.from(stored.nonce, "hex"),
+      Buffer.from(nonce, "hex"),
       Buffer.from(signature, "base64"),
     );
     if (!valid) {
@@ -87,7 +97,7 @@ export function verifySignature(req: Request, res: Response): void {
     return;
   }
 
-  nonceStore.delete(address);
+  await redisClient.del(key);
   const token = createJwt({ sub: address });
   res.json({ token, expiresIn: TOKEN_EXPIRY });
 }
@@ -155,7 +165,7 @@ export function rateLimit() {
     res: Response,
     next: NextFunction,
   ): Promise<void> => {
-    const ip = req.ip || req.connection.remoteAddress || "unknown";
+    const ip = req.ip || "unknown";
 
     try {
       await ipLimiter.consume(ip);
@@ -197,6 +207,7 @@ export function rateLimitWrite() {
       res
         .status(429)
         .json({ error: "Write rate limit exceeded (10 per hour)" });
+      return;
     }
   };
 }

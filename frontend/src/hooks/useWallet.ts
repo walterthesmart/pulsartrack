@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWalletStore } from "../store/wallet-store";
 import {
@@ -28,6 +28,15 @@ export function useWallet() {
     autoReconnect,
   } = useWalletStore();
   const queryClient = useQueryClient();
+
+  // Address and connection refs to prevent stale closure in checkConnection
+  const addressRef = useRef<string | null>(address);
+  const isConnectedRef = useRef<boolean>(isConnected);
+
+  useEffect(() => {
+    addressRef.current = address;
+    isConnectedRef.current = isConnected;
+  }, [address, isConnected]);
 
   const connect = useCallback(async () => {
     try {
@@ -73,23 +82,21 @@ export function useWallet() {
 
     if (connected) {
       const addr = await getWalletAddress();
-      if (addr && addr !== address) {
+      if (addr && addr !== addressRef.current) {
         setAddress(addr);
         setConnected(true);
         queryClient.invalidateQueries(); // Invalidate on account switch
         return;
-      } else if (addr === address) {
+      } else if (addr === addressRef.current) {
         setConnected(true);
         return;
       }
     }
 
-    if (isConnected && !connected) {
+    if (isConnectedRef.current && !connected) {
       storeDisconnect();
     }
   }, [
-    address,
-    isConnected,
     setAddress,
     setConnected,
     setNetworkMismatch,
@@ -97,11 +104,11 @@ export function useWallet() {
     queryClient,
   ]);
 
-  // Polling for wallet state changes
+  // Polling for wallet state changes - 10s frequency is sufficient
   useEffect(() => {
     const intervalId = setInterval(() => {
       checkConnection();
-    }, 3000); // 3 seconds
+    }, 10000);
 
     return () => clearInterval(intervalId);
   }, [checkConnection]);

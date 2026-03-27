@@ -1,4 +1,5 @@
 import { Horizon, Networks } from '@stellar/stellar-sdk';
+import { logger } from '../lib/logger';
 
 const NETWORK = process.env.STELLAR_NETWORK || 'testnet';
 const HORIZON_URL =
@@ -70,3 +71,48 @@ export const CONTRACT_IDS = {
   AD_VERIFICATION: process.env.CONTRACT_AD_VERIFICATION || '',
   PUBLISHER_NETWORK: process.env.CONTRACT_PUBLISHER_NETWORK || '',
 };
+
+/**
+ * Core contracts required for the platform to function.
+ * All others are optional/feature-flagged.
+ */
+const REQUIRED_CONTRACT_ENV_VARS = [
+  'CONTRACT_AD_REGISTRY',
+  'CONTRACT_CAMPAIGN_ORCHESTRATOR',
+  'CONTRACT_ESCROW_VAULT',
+  'CONTRACT_FRAUD_PREVENTION',
+  'CONTRACT_PAYMENT_PROCESSOR',
+  'CONTRACT_AUCTION_ENGINE',
+  'CONTRACT_REVENUE_SETTLEMENT',
+  'CONTRACT_PUBLISHER_VERIFICATION',
+  'CONTRACT_ANALYTICS_AGGREGATOR',
+];
+
+/**
+ * Validates that all required contract IDs are present.
+ * - In production: throws on any missing value, preventing startup.
+ * - In development: logs a warning for each missing value so the server
+ *   still starts (useful when only testing non-contract routes).
+ * Pass SKIP_CONTRACT_VALIDATION=true to suppress even the warnings.
+ */
+export function validateContractIds(): void {
+  if (process.env.SKIP_CONTRACT_VALIDATION === 'true') {
+    logger.warn('[Config] Contract ID validation skipped (SKIP_CONTRACT_VALIDATION=true)');
+    return;
+  }
+
+  const missing = REQUIRED_CONTRACT_ENV_VARS.filter(
+    (key) => !process.env[key] || process.env[key] === 'PLACEHOLDER',
+  );
+
+  if (missing.length === 0) return;
+
+  const message = `Missing or placeholder contract IDs:\n  ${missing.join('\n  ')}`;
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`[Config] ${message}\nSet these environment variables before starting the server.`);
+  }
+
+  logger.warn(`[Config] ${message}`);
+  logger.warn('[Config] Contract calls will fail for the above contracts. Set SKIP_CONTRACT_VALIDATION=true to suppress this warning.');
+}

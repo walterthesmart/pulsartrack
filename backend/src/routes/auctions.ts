@@ -69,9 +69,9 @@ router.get(
         total: onChainTotal ?? auctions.length,
       });
     } catch (err: any) {
-      res
-        .status(500)
-        .json({ error: "Failed to fetch auctions", details: err.message });
+      req.log?.error({ err }, 'Failed to fetch auctions');
+      const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+      res.status(500).json({ error: "Failed to fetch auctions", ...(details && { details }) });
     }
   },
 );
@@ -89,27 +89,35 @@ router.post(
     },
   }),
   async (req: Request, res: Response) => {
+    const client = await pool.connect();
     try {
       const address = (req as any).stellarAddress;
       const auctionId = parseInt(req.params.auctionId as string);
       const { campaignId, amountStroops } = req.body;
 
-      const { rows } = await pool.query(
+      await client.query('BEGIN');
+
+      const { rows } = await client.query(
         `INSERT INTO bids (auction_id, bidder, campaign_id, amount_stroops)
        VALUES ($1, $2, $3, $4) RETURNING *`,
         [auctionId, address, campaignId, amountStroops],
       );
 
-      await pool.query(
+      await client.query(
         `UPDATE auctions SET bid_count = bid_count + 1 WHERE auction_id = $1`,
         [auctionId],
       );
 
+      await client.query('COMMIT');
+
       res.status(201).json(rows[0]);
     } catch (err: any) {
-      res
-        .status(500)
-        .json({ error: "Failed to submit bid", details: err.message });
+      await client.query('ROLLBACK');
+      req.log?.error({ err }, 'Failed to submit bid');
+      const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+      res.status(500).json({ error: "Failed to submit bid", ...(details && { details }) });
+    } finally {
+      client.release();
     }
   },
 );

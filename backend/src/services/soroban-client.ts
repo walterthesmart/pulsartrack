@@ -25,6 +25,13 @@ export async function callReadOnly(
   method: string,
   args: xdr.ScVal[] = [],
 ): Promise<any> {
+  if (!contractId || contractId === 'PLACEHOLDER') {
+    throw new Error(
+      `callReadOnly("${method}"): contract ID is missing or a placeholder. ` +
+      `Set the corresponding CONTRACT_* environment variable.`,
+    );
+  }
+
   const server = getServer();
   const contract = new Contract(contractId);
   const account = await server.getAccount(SIMULATION_ACCOUNT);

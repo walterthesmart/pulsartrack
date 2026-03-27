@@ -52,19 +52,27 @@ router.get('/leaderboard', validate({
 
     res.json({ publishers });
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to fetch publisher leaderboard', details: err.message });
+    req.log?.error({ err }, 'Failed to fetch publisher leaderboard');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to fetch publisher leaderboard', ...(details && { details }) });
   }
 });
 
 router.post('/register', requireAuth, validate({
   body: {
     displayName: { type: 'string', required: true, minLength: 1, maxLength: 100 },
-    website: { type: 'string', maxLength: 500 },
+    website: { type: 'string', maxLength: 500, format: 'url' },
   },
 }), async (req: Request, res: Response) => {
   try {
     const address = (req as any).stellarAddress;
     const { displayName, website } = req.body;
+
+    // Check if the address is already registered
+    const existing = await pool.query('SELECT id FROM publishers WHERE address = $1', [address]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Publisher already registered' });
+    }
 
     const { rows } = await pool.query(
       `INSERT INTO publishers (address, display_name, website)
@@ -74,7 +82,9 @@ router.post('/register', requireAuth, validate({
 
     res.status(201).json(rows[0]);
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to register publisher', details: err.message });
+    req.log?.error({ err }, 'Failed to register publisher');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to register publisher', ...(details && { details }) });
   }
 });
 

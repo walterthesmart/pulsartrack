@@ -41,7 +41,9 @@ router.get('/stats', async (_req: Request, res: Response) => {
       total_spent_xlm: Number(stats.total_spent_stroops) / 1e7,
     });
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to fetch campaign stats', details: err.message });
+    _req.log?.error({ err }, 'Failed to fetch campaign stats');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to fetch campaign stats', ...(details && { details }) });
   }
 });
 
@@ -58,15 +60,17 @@ router.post('/', requireAuth, validate({
     const { title, contentId, budgetStroops, dailyBudgetStroops } = req.body;
 
     const { rows } = await pool.query(
-      `INSERT INTO campaigns (campaign_id, advertiser, title, content_id, budget_stroops, daily_budget_stroops)
-       VALUES ((SELECT COALESCE(MAX(campaign_id), 0) + 1 FROM campaigns), $1, $2, $3, $4, $5)
+      `INSERT INTO campaigns (advertiser, title, content_id, budget_stroops, daily_budget_stroops)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
       [address, title, contentId, budgetStroops, dailyBudgetStroops]
     );
 
     res.status(201).json(rows[0]);
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to create campaign', details: err.message });
+    req.log?.error({ err }, 'Failed to create campaign');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to create campaign', ...(details && { details }) });
   }
 });
 
