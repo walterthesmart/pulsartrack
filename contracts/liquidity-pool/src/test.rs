@@ -285,6 +285,39 @@ fn test_repay_partial_amount() {
 }
 
 #[test]
+#[should_panic(expected = "no shares in pool")]
+fn test_withdraw_when_total_shares_zero() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, _, token) = setup(&env);
+    let provider = Address::generate(&env);
+
+    // Deposit and then withdraw all shares so total_shares reaches 0
+    mint(&env, &token, &provider, 1_000_000);
+    let shares = c.deposit(&provider, &100_000i128);
+    c.withdraw(&provider, &shares);
+
+    // Pool now has total_shares == 0; attempting to withdraw 0 shares must panic
+    c.withdraw(&provider, &0i128);
+}
+
+#[test]
+fn test_borrow_utilization_rate_not_calculated_when_liquidity_zero() {
+    // When total_liquidity is 0, borrow() must not panic with division by zero.
+    // Any non-zero borrow amount is caught earlier by "insufficient liquidity",
+    // so we verify the borrow with amount=0 leaves utilization_rate unchanged.
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, _, _) = setup(&env);
+    let borrower = Address::generate(&env);
+
+    // No liquidity deposited; borrow 0 should succeed without dividing by zero
+    c.borrow(&borrower, &1u64, &0i128, &86_400u64);
+    let pool = c.get_pool_state();
+    assert_eq!(pool.utilization_rate, 0); // unchanged, no division attempted
+}
+
+#[test]
 fn test_accrue_interest() {
     let env = Env::default();
     env.mock_all_auths();

@@ -177,6 +177,9 @@ impl LiquidityPoolContract {
             .get(&DataKey::TotalShares)
             .unwrap_or(0);
 
+        if total_shares == 0 {
+            panic!("no shares in pool");
+        }
         let amount = (shares * pool.total_liquidity) / total_shares;
         let available = pool.total_liquidity - pool.total_borrowed;
 
@@ -234,7 +237,9 @@ impl LiquidityPoolContract {
         }
 
         pool.total_borrowed += amount;
-        pool.utilization_rate = ((pool.total_borrowed * 100) / pool.total_liquidity) as u32;
+        if pool.total_liquidity > 0 {
+            pool.utilization_rate = ((pool.total_borrowed * 100) / pool.total_liquidity) as u32;
+        }
         pool.last_updated = env.ledger().timestamp();
         env.storage().instance().set(&DataKey::PoolState, &pool);
 

@@ -11,7 +11,8 @@ pub struct RevenuePool {
     pub platform_share: i128,  // platform fee portion
     pub publisher_share: i128, // publisher earnings portion
     pub treasury_share: i128,  // DAO treasury portion
-    pub burn_amount: i128,     // tokens to burn
+    pub burn_amount: i128,     // tokens pending burn (cleared after each distribution)
+    pub total_burned: i128,    // cumulative tokens burned on-chain across all distributions
     pub platform_pct: u32,     // basis points
     pub publisher_pct: u32,
     pub treasury_pct: u32,
@@ -87,6 +88,7 @@ impl RevenueSettlementContract {
                 publisher_share: 0,
                 treasury_share: 0,
                 burn_amount: 0,
+                total_burned: 0,
                 platform_pct: 250,    // 2.5%
                 publisher_pct: 9_000, // 90%
                 treasury_pct: 500,    // 5%
@@ -223,6 +225,7 @@ impl RevenueSettlementContract {
         }
 
         if pool.burn_amount > 0 {
+            pool.total_burned += pool.burn_amount; // accumulate before resetting
             token_client.burn(&env.current_contract_address(), &pool.burn_amount);
             pool.burn_amount = 0;
         }
