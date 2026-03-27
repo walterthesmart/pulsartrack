@@ -6,6 +6,7 @@ import { useWalletStore } from '@/store/wallet-store';
 import { WalletConnectButton } from '@/components/wallet/WalletModal';
 import { useCreateCampaign, useCampaignCount, useAdvertiserCampaigns, useAdvertiserStats } from '@/hooks/useContract';
 import { formatXlm, formatNumber } from '@/lib/display-utils';
+import { campaignSchema } from '@/lib/validation/schemas';
 
 interface CampaignForm {
   title: string;
@@ -42,6 +43,7 @@ export default function AdvertiserPage() {
 
   const [form, setForm] = useState<CampaignForm>(EMPTY_FORM);
   const [activeTab, setActiveTab] = useState<'campaigns' | 'create' | 'analytics'>('campaigns');
+  const [errors, setErrors] = useState<Record<string, string[]>>({});
 
   if (!isConnected) {
     return (
@@ -62,12 +64,18 @@ export default function AdvertiserPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const result = campaignSchema.safeParse(form);
+    if (!result.success) {
+      setErrors(result.error.flatten().fieldErrors);
+      return;
+    }
+    setErrors({});
+    // Convert numeric fields as needed for backend
     createCampaign({
-      title: form.title,
-      budgetXlm: parseFloat(form.budgetXlm) || 0,
-      dailyBudgetXlm: parseFloat(form.dailyBudgetXlm) || 0,
-      durationDays: parseInt(form.durationDays) || 30,
-      contentId: form.contentId,
+      ...result.data,
+      budgetXlm: parseFloat(result.data.budgetXlm),
+      dailyBudgetXlm: parseFloat(result.data.dailyBudgetXlm),
+      durationDays: Number(result.data.durationDays),
     });
   };
 
@@ -202,6 +210,14 @@ export default function AdvertiserPage() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Show validation errors */}
+                {Object.keys(errors).length > 0 && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {Object.entries(errors).map(([field, msgs]) =>
+                      msgs?.map((msg, i) => <div key={field + i}>{msg}</div>)
+                    )}
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Title</label>
                   <input
