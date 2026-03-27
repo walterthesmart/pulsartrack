@@ -9,7 +9,7 @@ datasource db {
 
 model Campaign {
   id                 String    @id @default(uuid()) @db.Uuid
-  campaignId         BigInt    @unique @map("campaign_id")
+  campaignId         BigInt    @unique @default(autoincrement()) @map("campaign_id")
   advertiser         String    @db.VarChar(64)
   title              String
   contentId          String    @map("content_id")

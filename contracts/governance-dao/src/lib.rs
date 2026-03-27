@@ -340,7 +340,7 @@ impl GovernanceDaoContract {
             soroban_sdk::vec![&env],
         );
 
-        let total_votes = proposal.votes_for + proposal.votes_against;
+        let total_votes = proposal.votes_for + proposal.votes_against + proposal.votes_abstain;
 
         let quorum_met = (total_votes * 10_000) >= (total_supply * (proposal.quorum_bps as i128));
 
@@ -393,6 +393,9 @@ impl GovernanceDaoContract {
             panic!("proposal not passed");
         }
 
+        // CEI: write the terminal status to storage BEFORE any side effects so
+        // that a re-entrant or concurrent call within the same transaction sees
+        // `Executed` and is rejected by the status check above.
         proposal.status = ProposalStatus::Executed;
         proposal.executed_at = Some(env.ledger().timestamp());
 
@@ -403,6 +406,10 @@ impl GovernanceDaoContract {
             PERSISTENT_LIFETIME_THRESHOLD,
             PERSISTENT_BUMP_AMOUNT,
         );
+
+        // Any execution side effects (e.g. calling proposal.target_contract)
+        // must be placed here — after the status has been committed — so they
+        // cannot be replayed if they succeed but the status write were to fail.
     }
 
     /// Cancel a proposal (proposer or admin)

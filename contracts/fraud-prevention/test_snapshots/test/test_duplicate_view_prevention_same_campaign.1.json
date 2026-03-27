@@ -54,13 +54,12 @@
     ],
     [],
     [],
-    [],
     []
   ],
   "ledger": {
     "protocol_version": 22,
     "sequence_number": 0,
-    "timestamp": 1,
+    "timestamp": 0,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "base_reserve": 0,
     "min_persistent_entry_ttl": 4096,
@@ -197,7 +196,7 @@
                         "symbol": "total_views"
                       },
                       "val": {
-                        "u64": 4
+                        "u64": 3
                       }
                     },
                     {
@@ -205,7 +204,7 @@
                         "symbol": "verified_views"
                       },
                       "val": {
-                        "u64": 4
+                        "u64": 3
                       }
                     }
                   ]
@@ -227,7 +226,7 @@
                   "symbol": "ViewRecord"
                 },
                 {
-                  "bytes": "44a6ad966c729c167d5be33617f62d5b045f1c8f24b84e740606c90d1bdf4442"
+                  "bytes": "3b77b89e803a0c57aa544cb4dd61ae196b38f5b05c43af728b85c060735d8e2f"
                 }
               ]
             },
@@ -247,101 +246,7 @@
                       "symbol": "ViewRecord"
                     },
                     {
-                      "bytes": "44a6ad966c729c167d5be33617f62d5b045f1c8f24b84e740606c90d1bdf4442"
-                    }
-                  ]
-                },
-                "durability": "persistent",
-                "val": {
-                  "map": [
-                    {
-                      "key": {
-                        "symbol": "campaign_id"
-                      },
-                      "val": {
-                        "u64": 1
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "publisher"
-                      },
-                      "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "timestamp"
-                      },
-                      "val": {
-                        "u64": 0
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "verification_score"
-                      },
-                      "val": {
-                        "u32": 80
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "verified"
-                      },
-                      "val": {
-                        "bool": true
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "viewer"
-                      },
-                      "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
-                      }
-                    }
-                  ]
-                }
-              }
-            },
-            "ext": "v0"
-          },
-          1051200
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-            "key": {
-              "vec": [
-                {
-                  "symbol": "ViewRecord"
-                },
-                {
-                  "bytes": "66ea859f013f9816f73aae372a71a7b03491c3123cc4e0b42243bf8e5ffe7b19"
-                }
-              ]
-            },
-            "durability": "persistent"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-                "key": {
-                  "vec": [
-                    {
-                      "symbol": "ViewRecord"
-                    },
-                    {
-                      "bytes": "66ea859f013f9816f73aae372a71a7b03491c3123cc4e0b42243bf8e5ffe7b19"
+                      "bytes": "3b77b89e803a0c57aa544cb4dd61ae196b38f5b05c43af728b85c060735d8e2f"
                     }
                   ]
                 },
@@ -415,7 +320,7 @@
                   "symbol": "ViewRecord"
                 },
                 {
-                  "bytes": "add7c34cdffa07d3d3c4365ace8d1d2de2fe30a01df6f6a0671edd972fb869c0"
+                  "bytes": "4fca9658248f3c13ba705ae1b94f4de6f351606acf89fe2e5a513022624f9aaa"
                 }
               ]
             },
@@ -435,7 +340,7 @@
                       "symbol": "ViewRecord"
                     },
                     {
-                      "bytes": "add7c34cdffa07d3d3c4365ace8d1d2de2fe30a01df6f6a0671edd972fb869c0"
+                      "bytes": "4fca9658248f3c13ba705ae1b94f4de6f351606acf89fe2e5a513022624f9aaa"
                     }
                   ]
                 },
@@ -509,7 +414,7 @@
                   "symbol": "ViewRecord"
                 },
                 {
-                  "bytes": "ccaf9ed96229e0a0dcb3f0965587b636e38ec140dd5abc6576fe0d44bdb73e22"
+                  "bytes": "769f4db04331d91f619bbe8b0e0bc052b507414aae35ef3992bbfb5e3b97f343"
                 }
               ]
             },
@@ -529,7 +434,7 @@
                       "symbol": "ViewRecord"
                     },
                     {
-                      "bytes": "ccaf9ed96229e0a0dcb3f0965587b636e38ec140dd5abc6576fe0d44bdb73e22"
+                      "bytes": "769f4db04331d91f619bbe8b0e0bc052b507414aae35ef3992bbfb5e3b97f343"
                     }
                   ]
                 },
@@ -557,7 +462,7 @@
                         "symbol": "timestamp"
                       },
                       "val": {
-                        "u64": 1
+                        "u64": 0
                       }
                     },
                     {
@@ -581,7 +486,7 @@
                         "symbol": "viewer"
                       },
                       "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                       }
                     }
                   ]
@@ -635,7 +540,7 @@
                 },
                 "durability": "temporary",
                 "val": {
-                  "u64": 3
+                  "u64": 2
                 }
               }
             },
@@ -811,7 +716,7 @@
                           ]
                         },
                         "val": {
-                          "u64": 4
+                          "u64": 3
                         }
                       }
                     ]
@@ -869,7 +774,7 @@
                   "u64": 1
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
                   "bool": true

@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { StrKey } from '@stellar/stellar-sdk';
+import { URL } from 'url';
 
 interface FieldRule {
   type: 'string' | 'number' | 'stellar_address';
+  format?: 'url';
   required?: boolean;
   min?: number;
   max?: number;
@@ -59,6 +61,17 @@ function validateField(value: any, field: string, rule: FieldRule): ValidationEr
     }
     if (rule.maxLength !== undefined && str.length > rule.maxLength) {
       return { field, message: `${field} must be at most ${rule.maxLength} characters` };
+    }
+
+    if (rule.format === 'url' && str) {
+      try {
+        const url = new URL(str);
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          return { field, message: `${field} must be an HTTP(S) URL` };
+        }
+      } catch {
+        return { field, message: `${field} must be a valid URL` };
+      }
     }
   }
 

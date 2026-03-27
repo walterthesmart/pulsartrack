@@ -158,9 +158,10 @@ export async function callContract(
       description: options.description || `${options.method} on contract`,
     });
 
-    // Poll for result
-    for (let i = 0; i < 10; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+    // Poll for result with exponential backoff
+    for (let i = 0; i < 15; i++) {
+      const delay = Math.min(2000 * Math.pow(1.5, i), 10000);
+      await new Promise((resolve) => setTimeout(resolve, delay));
       const getResult = await server.getTransaction(txHash);
 
       if (getResult.status === rpc.Api.GetTransactionStatus.SUCCESS) {
@@ -193,7 +194,11 @@ export async function callContract(
       }
     }
 
-    // Polling timeout - transaction remains pending
+    // Polling timeout — update store so transaction doesn't stay "pending" forever
+    updateTransaction(txHash, {
+      status: "timeout",
+      error: "Transaction confirmation timed out — check explorer",
+    });
     return { success: false, error: "Transaction polling timeout", txHash };
   } catch (err: any) {
     return { success: false, error: err?.message || "Unknown error" };

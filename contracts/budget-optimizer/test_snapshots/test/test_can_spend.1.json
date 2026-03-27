@@ -162,6 +162,17 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "budget_remainder"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 16
+                        }
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "campaign_id"
                       },
                       "val": {
@@ -193,6 +204,14 @@
                     {
                       "key": {
                         "symbol": "last_optimized"
+                      },
+                      "val": {
+                        "u64": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "last_reset_day"
                       },
                       "val": {
                         "u64": 0

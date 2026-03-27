@@ -11,12 +11,14 @@ pub struct BudgetAllocation {
     pub total_budget: i128,
     pub daily_budget: i128,
     pub hourly_budget: i128,
+    pub budget_remainder: i128, // Stroops to distribute across first `remainder` hours
     pub spent_today: i128,
     pub spent_total: i128,
     pub optimization_mode: OptimizationMode,
     pub target_cpa: i128, // Target cost per acquisition
     pub target_ctr: u32,  // Target CTR * 10000
     pub last_optimized: u64,
+    pub last_reset_day: u64,
 }
 
 #[contracttype]
@@ -100,12 +102,14 @@ impl BudgetOptimizerContract {
             total_budget,
             daily_budget,
             hourly_budget: daily_budget / 24,
+            budget_remainder: daily_budget % 24,
             spent_today: 0,
             spent_total: 0,
             optimization_mode,
             target_cpa,
             target_ctr,
             last_optimized: env.ledger().timestamp(),
+            last_reset_day: env.ledger().timestamp() / 86_400,
         };
 
         let _ttl_key = DataKey::Allocation(campaign_id);
@@ -151,6 +155,7 @@ impl BudgetOptimizerContract {
 
         allocation.daily_budget = capped_daily;
         allocation.hourly_budget = capped_daily / 24;
+        allocation.budget_remainder = capped_daily % 24;
         allocation.last_optimized = env.ledger().timestamp();
 
         let _ttl_key = DataKey::Allocation(campaign_id);
@@ -210,9 +215,9 @@ impl BudgetOptimizerContract {
             .expect("allocation not found");
 
         let current_day = env.ledger().timestamp() / 86_400;
-        let last_day = allocation.last_optimized / 86_400;
-        if current_day > last_day {
+        if current_day > allocation.last_reset_day {
             allocation.spent_today = 0;
+            allocation.last_reset_day = current_day;
         }
 
         allocation.spent_today += amount;
@@ -247,8 +252,7 @@ impl BudgetOptimizerContract {
             .get::<DataKey, BudgetAllocation>(&DataKey::Allocation(campaign_id))
         {
             let current_day = env.ledger().timestamp() / 86_400;
-            let last_day = alloc.last_optimized / 86_400;
-            let effective_spent_today = if current_day > last_day {
+            let effective_spent_today = if current_day > alloc.last_reset_day {
                 0
             } else {
                 alloc.spent_today

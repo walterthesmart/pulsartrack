@@ -79,3 +79,64 @@ fn test_get_global_stats() {
     let stats = c.get_global_stats();
     assert_eq!(stats.total_campaigns, 0);
 }
+
+#[test]
+fn test_record_conversion_increments_count() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _) = setup(&env);
+    let caller = Address::generate(&env);
+
+    c.record_impression(&caller, &1u64, &100i128);
+    c.record_click(&caller, &1u64);
+    c.record_conversion(&caller, &1u64);
+
+    let a = c.get_campaign_analytics(&1u64).unwrap();
+    assert_eq!(a.total_conversions, 1);
+}
+
+#[test]
+fn test_record_conversion_calculates_cvr() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _) = setup(&env);
+    let caller = Address::generate(&env);
+
+    // 4 impressions, 2 clicks, 1 conversion → cvr = 1/2 * 10000 = 5000
+    for _ in 0..4 {
+        c.record_impression(&caller, &1u64, &100i128);
+    }
+    c.record_click(&caller, &1u64);
+    c.record_click(&caller, &1u64);
+    c.record_conversion(&caller, &1u64);
+
+    let a = c.get_campaign_analytics(&1u64).unwrap();
+    assert_eq!(a.cvr, 5000);
+}
+
+#[test]
+fn test_cvr_stays_zero_without_clicks() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _) = setup(&env);
+    let caller = Address::generate(&env);
+
+    // Impressions but no clicks — cvr guard prevents divide-by-zero
+    c.record_impression(&caller, &1u64, &100i128);
+
+    // Manually set total_conversions via record_conversion requires a click first;
+    // here we just confirm cvr is 0 without any clicks
+    let a = c.get_campaign_analytics(&1u64).unwrap();
+    assert_eq!(a.cvr, 0);
+}
+
+#[test]
+#[should_panic(expected = "analytics not found")]
+fn test_record_conversion_without_analytics_panics() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _) = setup(&env);
+    let caller = Address::generate(&env);
+
+    c.record_conversion(&caller, &999u64);
+}

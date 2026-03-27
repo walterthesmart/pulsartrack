@@ -6,11 +6,13 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  AlertTriangle,
   ExternalLink,
   RefreshCw,
 } from "lucide-react";
 import { useTransactionStore, Transaction } from "../../store/tx-store";
 import { pollTransaction } from "../../lib/tx-recovery";
+import { getExplorerTxUrl } from "../../lib/stellar-config";
 
 interface TxHistoryProps {
   isOpen: boolean;
@@ -40,6 +42,8 @@ export function TxHistory({ isOpen, onClose }: TxHistoryProps) {
         return <CheckCircle className="w-5 h-5 text-green-500" />;
       case "failed":
         return <XCircle className="w-5 h-5 text-red-500" />;
+      case "timeout":
+        return <AlertTriangle className="w-5 h-5 text-orange-500" />;
     }
   };
 
@@ -51,6 +55,8 @@ export function TxHistory({ isOpen, onClose }: TxHistoryProps) {
         return "Success";
       case "failed":
         return "Failed";
+      case "timeout":
+        return "Timed Out";
     }
   };
 
@@ -83,11 +89,6 @@ export function TxHistory({ isOpen, onClose }: TxHistoryProps) {
     if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
 
     return date.toLocaleDateString();
-  };
-
-  const getExplorerUrl = (txHash: string) => {
-    // Adjust based on network (testnet/mainnet)
-    return `https://stellar.expert/explorer/testnet/tx/${txHash}`;
   };
 
   if (!isOpen) return null;
@@ -148,7 +149,9 @@ export function TxHistory({ isOpen, onClose }: TxHistoryProps) {
                                   ? "bg-yellow-100 text-yellow-700"
                                   : tx.status === "success"
                                     ? "bg-green-100 text-green-700"
-                                    : "bg-red-100 text-red-700"
+                                    : tx.status === "timeout"
+                                      ? "bg-orange-100 text-orange-700"
+                                      : "bg-red-100 text-red-700"
                               }`}
                             >
                               {getStatusText(tx.status)}
@@ -172,7 +175,7 @@ export function TxHistory({ isOpen, onClose }: TxHistoryProps) {
                     {/* Actions */}
                     <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
                       <a
-                        href={getExplorerUrl(tx.txHash)}
+                        href={getExplorerTxUrl(tx.txHash)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 transition-colors"
@@ -180,7 +183,7 @@ export function TxHistory({ isOpen, onClose }: TxHistoryProps) {
                         <ExternalLink className="w-3 h-3" />
                         View on Explorer
                       </a>
-                      {tx.status === "pending" && (
+                      {(tx.status === "pending" || tx.status === "timeout") && (
                         <button
                           onClick={() => handleRetryPoll(tx.txHash)}
                           disabled={pollingTxHash === tx.txHash}

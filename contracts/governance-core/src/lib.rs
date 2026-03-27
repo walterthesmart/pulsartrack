@@ -157,10 +157,28 @@ impl GovernanceCoreContract {
         if let Some(grant) = env
             .storage()
             .persistent()
-            .get::<DataKey, RoleGrant>(&DataKey::RoleGrant(account, role))
+            .get::<DataKey, RoleGrant>(&DataKey::RoleGrant(account.clone(), role.clone()))
         {
             if let Some(expires) = grant.expires_at {
-                expires > env.ledger().timestamp()
+                if expires <= env.ledger().timestamp() {
+                    // Expired — remove from storage to avoid unbounded rent accumulation
+                    env.storage()
+                        .persistent()
+                        .remove(&DataKey::RoleGrant(account, role.clone()));
+
+                    let count: u32 = env
+                        .storage()
+                        .instance()
+                        .get(&DataKey::RoleCount(role.clone()))
+                        .unwrap_or(0);
+                    if count > 0 {
+                        env.storage()
+                            .instance()
+                            .set(&DataKey::RoleCount(role), &(count - 1));
+                    }
+                    return false;
+                }
+                true
             } else {
                 true
             }

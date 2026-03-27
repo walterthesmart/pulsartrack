@@ -423,15 +423,33 @@ fn test_duplicate_view_prevention_same_campaign() {
     // Initial verify
     assert!(client.verify_view(&1u64, &publisher1, &viewer1, &None));
 
-    // Same campaign, different viewer
+    // Same campaign, different viewer — distinct triplet, allowed
     assert!(client.verify_view(&1u64, &publisher1, &viewer2, &None));
 
-    // Same campaign, different publisher
+    // Same campaign, different publisher — distinct triplet, allowed
     assert!(client.verify_view(&1u64, &publisher2, &viewer1, &None));
+}
 
-    // Same campaign/publisher/viewer, different timestamp
+#[test]
+#[should_panic(expected = "duplicate view")]
+fn test_duplicate_view_same_triplet_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let publisher = Address::generate(&env);
+    let viewer = Address::generate(&env);
+
+    let lifecycle = Address::generate(&env);
+    let network = Address::generate(&env);
+    let vault = Address::generate(&env);
+    client.set_dependent_contracts(&admin, &lifecycle, &network, &vault);
+
+    client.verify_view(&1u64, &publisher, &viewer, &None);
+
+    // Same triplet after a timestamp advance must still be rejected
     env.ledger().with_mut(|li| {
         li.timestamp += 1;
     });
-    assert!(client.verify_view(&1u64, &publisher1, &viewer1, &None));
+    client.verify_view(&1u64, &publisher, &viewer, &None);
 }

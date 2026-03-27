@@ -9,6 +9,7 @@ vi.mock('ioredis', () => {
             defineCommand = vi.fn();
             get = vi.fn().mockResolvedValue(null);
             set = vi.fn().mockResolvedValue('OK');
+            del = vi.fn().mockResolvedValue(1);
             constructor() { }
         },
     };

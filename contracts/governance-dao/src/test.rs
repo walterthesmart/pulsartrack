@@ -449,6 +449,35 @@ fn test_execute_active_proposal_fails() {
 }
 
 #[test]
+#[should_panic(expected = "proposal not passed")]
+fn test_execute_proposal_twice_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin, _) = setup_with_mock_token(&env, 1_000);
+
+    let proposer = Address::generate(&env);
+    let voter = Address::generate(&env);
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
+
+    client.cast_vote(&voter, &proposal_id, &VoteChoice::For, &200i128);
+
+    env.ledger().with_mut(|li| {
+        li.sequence_number = 200;
+    });
+
+    client.finalize_proposal(&proposal_id);
+
+    // First execution succeeds
+    client.execute_proposal(&admin, &proposal_id);
+    let p = client.get_proposal(&proposal_id).unwrap();
+    assert!(matches!(p.status, ProposalStatus::Executed));
+
+    // Second execution must be rejected — status is no longer Passed
+    client.execute_proposal(&admin, &proposal_id);
+}
+
+#[test]
 #[should_panic(expected = "unauthorized")]
 fn test_execute_proposal_by_stranger_fails() {
     let env = Env::default();

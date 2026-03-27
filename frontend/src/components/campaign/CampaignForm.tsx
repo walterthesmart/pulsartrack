@@ -19,6 +19,7 @@ export function CampaignForm({ onSuccess, onCancel }: CampaignFormProps) {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isValid },
   } = useForm<CampaignFormData>({
     resolver: zodResolver(campaignSchema),
@@ -26,29 +27,41 @@ export function CampaignForm({ onSuccess, onCancel }: CampaignFormProps) {
     defaultValues: {
       title: "",
       contentId: "",
+      campaignType: 1,
       budgetXlm: "",
-      dailyBudgetXlm: "",
+      costPerViewXlm: "0.001",
       durationDays: 30,
-      targetGeo: "",
-      targetInterests: "",
+      targetViews: "10000",
+      dailyViewLimit: "1000",
+      refundable: true,
     },
   });
 
+  const budgetXlm = watch("budgetXlm");
+  const costPerViewXlm = watch("costPerViewXlm");
+
+  // Calculate suggested target views based on budget and cost per view
+  const suggestedTargetViews =
+    budgetXlm && costPerViewXlm
+      ? Math.floor(parseFloat(budgetXlm) / parseFloat(costPerViewXlm))
+      : 0;
+
   const onSubmit = async (data: CampaignFormData) => {
     setSubmitError(null);
-    const budget = parseFloat(data.budgetXlm);
 
     try {
       const result = await createCampaign({
         title: data.title,
         contentId: data.contentId,
-        budgetXlm: budget,
-        dailyBudgetXlm: data.dailyBudgetXlm
-          ? parseFloat(data.dailyBudgetXlm)
-          : budget / 30,
-        durationDays: data.durationDays as unknown as number,
+        campaignType: data.campaignType as number,
+        budgetXlm: parseFloat(data.budgetXlm),
+        costPerViewXlm: parseFloat(data.costPerViewXlm),
+        durationDays: data.durationDays as number,
+        targetViews: parseInt(data.targetViews),
+        dailyViewLimit: parseInt(data.dailyViewLimit),
+        refundable: data.refundable ?? true,
       });
-      onSuccess?.((result as any)?.result || 0);
+      onSuccess?.(result as unknown as number);
       reset();
     } catch (err: any) {
       setSubmitError(err?.message || "Failed to create campaign");
@@ -68,7 +81,7 @@ export function CampaignForm({ onSuccess, onCancel }: CampaignFormProps) {
           id="campaign-title"
           type="text"
           {...register("title")}
-          placeholder="e.g. Summer Product Launch"
+          placeholder="My Campaign"
           className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 text-sm"
         />
         {errors.title && (
@@ -87,12 +100,33 @@ export function CampaignForm({ onSuccess, onCancel }: CampaignFormProps) {
           id="campaign-content-id"
           type="text"
           {...register("contentId")}
-          placeholder="IPFS hash or content identifier"
+          placeholder="ipfs://..."
           className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 text-sm"
         />
         {errors.contentId && (
+          <p className="text-red-400 text-xs mt-1">{errors.contentId.message}</p>
+        )}
+      </div>
+
+      <div>
+        <label
+          htmlFor="campaign-type"
+          className="block text-sm font-medium text-gray-300 mb-1"
+        >
+          Campaign Type <span className="text-red-400">*</span>
+        </label>
+        <select
+          id="campaign-type"
+          {...register("campaignType", { valueAsNumber: true })}
+          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 text-sm"
+        >
+          <option value={1}>Standard</option>
+          <option value={2}>Premium</option>
+          <option value={3}>Enterprise</option>
+        </select>
+        {errors.campaignType && (
           <p className="text-red-400 text-xs mt-1">
-            {errors.contentId.message}
+            {errors.campaignType.message}
           </p>
         )}
       </div>
@@ -110,7 +144,7 @@ export function CampaignForm({ onSuccess, onCancel }: CampaignFormProps) {
             type="number"
             {...register("budgetXlm")}
             placeholder="500"
-            min="1"
+            min="0.1"
             step="0.1"
             className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 text-sm"
           />
@@ -122,23 +156,79 @@ export function CampaignForm({ onSuccess, onCancel }: CampaignFormProps) {
         </div>
         <div>
           <label
-            htmlFor="campaign-daily-budget"
+            htmlFor="campaign-cost-per-view"
             className="block text-sm font-medium text-gray-300 mb-1"
           >
-            Daily Budget (XLM)
+            Cost Per View (XLM) <span className="text-red-400">*</span>
           </label>
           <input
-            id="campaign-daily-budget"
+            id="campaign-cost-per-view"
             type="number"
-            {...register("dailyBudgetXlm")}
-            placeholder="auto"
-            min="1"
-            step="0.1"
+            {...register("costPerViewXlm")}
+            placeholder="0.001"
+            min="0.0001"
+            step="0.0001"
             className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 text-sm"
           />
-          {errors.dailyBudgetXlm && (
+          {errors.costPerViewXlm && (
             <p className="text-red-400 text-xs mt-1">
-              {errors.dailyBudgetXlm.message}
+              {errors.costPerViewXlm.message}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label
+            htmlFor="campaign-target-views"
+            className="block text-sm font-medium text-gray-300 mb-1"
+          >
+            Target Views <span className="text-red-400">*</span>
+          </label>
+          <input
+            id="campaign-target-views"
+            type="number"
+            {...register("targetViews")}
+            placeholder={
+              suggestedTargetViews > 0
+                ? suggestedTargetViews.toString()
+                : "10000"
+            }
+            min="1"
+            step="1"
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 text-sm"
+          />
+          {errors.targetViews && (
+            <p className="text-red-400 text-xs mt-1">
+              {errors.targetViews.message}
+            </p>
+          )}
+          {suggestedTargetViews > 0 && (
+            <p className="text-gray-400 text-xs mt-1">
+              Suggested: {suggestedTargetViews.toLocaleString()} views
+            </p>
+          )}
+        </div>
+        <div>
+          <label
+            htmlFor="campaign-daily-limit"
+            className="block text-sm font-medium text-gray-300 mb-1"
+          >
+            Daily View Limit <span className="text-red-400">*</span>
+          </label>
+          <input
+            id="campaign-daily-limit"
+            type="number"
+            {...register("dailyViewLimit")}
+            placeholder="1000"
+            min="1"
+            step="1"
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 text-sm"
+          />
+          {errors.dailyViewLimit && (
+            <p className="text-red-400 text-xs mt-1">
+              {errors.dailyViewLimit.message}
             </p>
           )}
         </div>
@@ -149,7 +239,7 @@ export function CampaignForm({ onSuccess, onCancel }: CampaignFormProps) {
           htmlFor="campaign-duration"
           className="block text-sm font-medium text-gray-300 mb-1"
         >
-          Duration (days)
+          Duration (days) <span className="text-red-400">*</span>
         </label>
         <select
           id="campaign-duration"
@@ -169,36 +259,19 @@ export function CampaignForm({ onSuccess, onCancel }: CampaignFormProps) {
         )}
       </div>
 
-      <div>
-        <label
-          htmlFor="campaign-geo"
-          className="block text-sm font-medium text-gray-300 mb-1"
-        >
-          Geographic Targets
-        </label>
+      <div className="flex items-center">
         <input
-          id="campaign-geo"
-          type="text"
-          {...register("targetGeo")}
-          placeholder="US,EU,APAC (comma-separated)"
-          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 text-sm"
+          id="campaign-refundable"
+          type="checkbox"
+          {...register("refundable")}
+          className="w-4 h-4 text-indigo-600 bg-gray-700 border-gray-600 rounded focus:ring-indigo-500 focus:ring-2"
         />
-      </div>
-
-      <div>
         <label
-          htmlFor="campaign-interests"
-          className="block text-sm font-medium text-gray-300 mb-1"
+          htmlFor="campaign-refundable"
+          className="ml-2 text-sm text-gray-300"
         >
-          Interest Segments
+          Allow refund of remaining budget if campaign is cancelled
         </label>
-        <input
-          id="campaign-interests"
-          type="text"
-          {...register("targetInterests")}
-          placeholder="tech,finance,gaming (comma-separated)"
-          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 text-sm"
-        />
       </div>
 
       {submitError && (
@@ -210,7 +283,7 @@ export function CampaignForm({ onSuccess, onCancel }: CampaignFormProps) {
       <div className="flex gap-3 pt-2">
         <button
           type="submit"
-          disabled={!isValid || isPending}
+          disabled={isPending}
           className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm"
         >
           {isPending ? "Creating..." : "Create Campaign"}

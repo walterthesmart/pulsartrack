@@ -4,7 +4,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useReducer,
+  useRef,
   type ReactNode,
 } from 'react';
 import { clsx } from 'clsx';
@@ -86,19 +88,40 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, dispatch] = useReducer(reducer, []);
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const addToast = useCallback((type: ToastType, title: string, message?: string) => {
     const id = `${Date.now()}-${Math.random()}`;
     dispatch({ type: 'ADD', toast: { id, type, title, message } });
-    // Auto-dismiss after 5 seconds
-    setTimeout(() => dispatch({ type: 'REMOVE', id }), 5000);
+
+    const timer = setTimeout(() => {
+      dispatch({ type: 'REMOVE', id });
+      timersRef.current.delete(id);
+    }, 5000);
+
+    timersRef.current.set(id, timer);
   }, []);
 
   const success = useCallback((t: string, m?: string) => addToast('success', t, m), [addToast]);
   const error = useCallback((t: string, m?: string) => addToast('error', t, m), [addToast]);
   const warning = useCallback((t: string, m?: string) => addToast('warning', t, m), [addToast]);
   const info = useCallback((t: string, m?: string) => addToast('info', t, m), [addToast]);
-  const dismiss = useCallback((id: string) => dispatch({ type: 'REMOVE', id }), []);
+  const dismiss = useCallback((id: string) => {
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
+
+    dispatch({ type: 'REMOVE', id });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach((timer) => clearTimeout(timer));
+      timersRef.current.clear();
+    };
+  }, []);
 
   return (
     <ToastContext.Provider value={{ toasts, success, error, warning, info, dismiss }}>

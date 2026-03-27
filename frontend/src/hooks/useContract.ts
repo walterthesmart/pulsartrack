@@ -1,21 +1,22 @@
-'use client';
+"use client";
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   callContract,
   callReadOnly,
   ContractCallOptions,
   ReadOnlyOptions,
-} from '../lib/soroban-client';
-import { CONTRACT_IDS } from '../lib/stellar-config';
-import { useWalletStore } from '../store/wallet-store';
+} from "../lib/soroban-client";
+import { CONTRACT_IDS } from "../lib/stellar-config";
+import { useWalletStore } from "../store/wallet-store";
 import {
   u64ToScVal,
   stringToScVal,
   i128ToScVal,
   addressToScVal,
   boolToScVal,
-} from '../lib/soroban-client';
+  u32ToScVal,
+} from "../lib/soroban-client";
 
 /**
  * Hook for contract write operations
@@ -29,7 +30,7 @@ export function useContractCall() {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['contract', variables.contractId],
+        queryKey: ["contract", variables.contractId],
       });
     },
   });
@@ -43,7 +44,7 @@ export function useContractRead<T = any>(
   enabled = true,
 ) {
   return useQuery<T, Error>({
-    queryKey: ['contract', options.contractId, options.method, options.args],
+    queryKey: ["contract", options.contractId, options.method, options.args],
     queryFn: () => callReadOnly(options),
     enabled: enabled && !!options.contractId,
     staleTime: 30_000,
@@ -58,7 +59,7 @@ export function useCampaign(campaignId: number, enabled = true) {
   return useContractRead(
     {
       contractId: CONTRACT_IDS.CAMPAIGN_ORCHESTRATOR,
-      method: 'get_campaign',
+      method: "get_campaign",
       args: [u64ToScVal(campaignId)],
     },
     enabled && campaignId > 0,
@@ -75,7 +76,7 @@ export function usePublisherReputation(
   return useContractRead(
     {
       contractId: CONTRACT_IDS.PUBLISHER_REPUTATION,
-      method: 'get_reputation',
+      method: "get_reputation",
       args: publisherAddress ? [addressToScVal(publisherAddress)] : [],
     },
     enabled && !!publisherAddress,
@@ -89,7 +90,7 @@ export function useAdvertiserStats(advertiserAddress: string, enabled = true) {
   return useContractRead(
     {
       contractId: CONTRACT_IDS.CAMPAIGN_ORCHESTRATOR,
-      method: 'get_advertiser_stats',
+      method: "get_advertiser_stats",
       args: advertiserAddress ? [addressToScVal(advertiserAddress)] : [],
     },
     enabled && !!advertiserAddress,
@@ -103,7 +104,7 @@ export function useCampaignCount(enabled = true) {
   return useContractRead<number>(
     {
       contractId: CONTRACT_IDS.CAMPAIGN_ORCHESTRATOR,
-      method: 'get_campaign_count',
+      method: "get_campaign_count",
       args: [],
     },
     enabled,
@@ -119,7 +120,7 @@ export function useAdvertiserCampaigns(
   enabled = true,
 ) {
   return useQuery({
-    queryKey: ['advertiser_campaigns', advertiserAddress, campaignCount],
+    queryKey: ["advertiser_campaigns", advertiserAddress, campaignCount],
     queryFn: async () => {
       if (!campaignCount) return [];
       const campaigns: any[] = [];
@@ -129,7 +130,7 @@ export function useAdvertiserCampaigns(
         promises.push(
           callReadOnly({
             contractId: CONTRACT_IDS.CAMPAIGN_ORCHESTRATOR,
-            method: 'get_campaign',
+            method: "get_campaign",
             args: [u64ToScVal(i)],
           })
             .then((campaign) => {
@@ -154,7 +155,7 @@ export function useSubscription(subscriberAddress: string, enabled = true) {
   return useContractRead(
     {
       contractId: CONTRACT_IDS.SUBSCRIPTION_MANAGER,
-      method: 'get_subscription',
+      method: "get_subscription",
       args: subscriberAddress ? [addressToScVal(subscriberAddress)] : [],
     },
     enabled && !!subscriberAddress,
@@ -168,7 +169,7 @@ export function usePrivacyConsent(userAddress: string, enabled = true) {
   return useContractRead(
     {
       contractId: CONTRACT_IDS.PRIVACY_LAYER,
-      method: 'get_consent',
+      method: "get_consent",
       args: userAddress ? [addressToScVal(userAddress)] : [],
     },
     enabled && !!userAddress,
@@ -182,7 +183,7 @@ export function useAuction(auctionId: number, enabled = true) {
   return useContractRead(
     {
       contractId: CONTRACT_IDS.AUCTION_ENGINE,
-      method: 'get_auction',
+      method: "get_auction",
       args: [u64ToScVal(auctionId)],
     },
     enabled && auctionId > 0,
@@ -197,25 +198,35 @@ export function useCreateCampaign() {
   const { address } = useWalletStore();
 
   const createCampaign = async (params: {
-    title: string;
+    title?: string;
+    contentId?: string;
+    campaignType: number;
     budgetXlm: number;
-    dailyBudgetXlm: number;
+    costPerViewXlm: number;
     durationDays: number;
-    contentId: string;
+    targetViews: number;
+    dailyViewLimit: number;
+    refundable: boolean;
   }) => {
-    if (!address) throw new Error('Wallet not connected');
+    if (!address) throw new Error("Wallet not connected");
     const STROOPS = 10_000_000;
+
+    // Convert duration from days to ledgers (assuming ~5 seconds per ledger)
+    const durationLedgers = params.durationDays * 17280; // 86400 seconds / 5 seconds per ledger
+
     return mutateAsync({
       contractId: CONTRACT_IDS.CAMPAIGN_ORCHESTRATOR,
-      method: 'create_campaign',
+      method: "create_campaign",
       source: address,
       args: [
-        addressToScVal(address),
-        stringToScVal(params.title),
-        i128ToScVal(Math.floor(params.budgetXlm * STROOPS)),
-        i128ToScVal(Math.floor(params.dailyBudgetXlm * STROOPS)),
-        u64ToScVal(params.durationDays * 86400),
-        stringToScVal(params.contentId),
+        addressToScVal(address), // advertiser
+        u32ToScVal(params.campaignType), // campaign_type (u32)
+        i128ToScVal(Math.floor(params.budgetXlm * STROOPS)), // budget in stroops
+        i128ToScVal(Math.floor(params.costPerViewXlm * STROOPS)), // cost_per_view in stroops
+        u32ToScVal(durationLedgers), // duration in ledgers (u32)
+        u64ToScVal(params.targetViews), // target_views
+        u64ToScVal(params.dailyViewLimit), // daily_view_limit
+        boolToScVal(params.refundable), // refundable
       ],
     });
   };
@@ -235,10 +246,10 @@ export function usePlaceBid() {
     amountStroops: bigint;
     campaignId: number;
   }) => {
-    if (!address) throw new Error('Wallet not connected');
+    if (!address) throw new Error("Wallet not connected");
     return mutateAsync({
       contractId: CONTRACT_IDS.AUCTION_ENGINE,
-      method: 'place_bid',
+      method: "place_bid",
       source: address,
       args: [
         addressToScVal(address),
@@ -269,7 +280,7 @@ export function useSetConsent() {
     if (!address) return;
     mutate({
       contractId: CONTRACT_IDS.PRIVACY_LAYER,
-      method: 'set_consent',
+      method: "set_consent",
       source: address,
       args: [
         addressToScVal(address),
@@ -291,7 +302,7 @@ export function useGovernanceBalance(userAddress: string, enabled = true) {
   return useContractRead<bigint>(
     {
       contractId: CONTRACT_IDS.GOVERNANCE_TOKEN,
-      method: 'balance',
+      method: "balance",
       args: userAddress ? [addressToScVal(userAddress)] : [],
     },
     enabled && !!userAddress,
@@ -305,7 +316,7 @@ export function useProposalCount(enabled = true) {
   return useContractRead<number>(
     {
       contractId: CONTRACT_IDS.GOVERNANCE_DAO,
-      method: 'get_proposal_count',
+      method: "get_proposal_count",
       args: [],
     },
     enabled,
@@ -319,7 +330,7 @@ export function useGovernanceProposal(proposalId: number, enabled = true) {
   return useContractRead(
     {
       contractId: CONTRACT_IDS.GOVERNANCE_DAO,
-      method: 'get_proposal',
+      method: "get_proposal",
       args: [u64ToScVal(proposalId)],
     },
     enabled && proposalId > 0,
@@ -334,7 +345,7 @@ export function useGovernanceProposals(
   enabled = true,
 ) {
   return useQuery({
-    queryKey: ['governance_proposals', proposalCount],
+    queryKey: ["governance_proposals", proposalCount],
     queryFn: async () => {
       if (!proposalCount || proposalCount === 0) return [];
       const proposals: any[] = [];
@@ -343,7 +354,7 @@ export function useGovernanceProposals(
         promises.push(
           callReadOnly({
             contractId: CONTRACT_IDS.GOVERNANCE_DAO,
-            method: 'get_proposal',
+            method: "get_proposal",
             args: [u64ToScVal(i)],
           })
             .then((proposal) => {
@@ -370,13 +381,13 @@ export function useCastVote() {
 
   const castVote = async (params: {
     proposalId: number;
-    voteType: 'For' | 'Against' | 'Abstain';
+    voteType: "For" | "Against" | "Abstain";
     votePower: bigint;
   }) => {
-    if (!address) throw new Error('Wallet not connected');
+    if (!address) throw new Error("Wallet not connected");
     return mutateAsync({
       contractId: CONTRACT_IDS.GOVERNANCE_DAO,
-      method: 'cast_vote',
+      method: "cast_vote",
       source: address,
       args: [
         addressToScVal(address),
@@ -402,10 +413,10 @@ export function useCreateProposal() {
     description: string;
     votingPeriodDays: number;
   }) => {
-    if (!address) throw new Error('Wallet not connected');
+    if (!address) throw new Error("Wallet not connected");
     return mutateAsync({
       contractId: CONTRACT_IDS.GOVERNANCE_DAO,
-      method: 'create_proposal',
+      method: "create_proposal",
       source: address,
       args: [
         addressToScVal(address),
@@ -426,7 +437,7 @@ export function usePublisherData(publisherAddress: string, enabled = true) {
   return useContractRead(
     {
       contractId: CONTRACT_IDS.PUBLISHER_VERIFICATION,
-      method: 'get_publisher',
+      method: "get_publisher",
       args: publisherAddress ? [addressToScVal(publisherAddress)] : [],
     },
     enabled && !!publisherAddress,
@@ -440,7 +451,7 @@ export function usePublisherKyc(publisherAddress: string, enabled = true) {
   return useContractRead(
     {
       contractId: CONTRACT_IDS.PUBLISHER_VERIFICATION,
-      method: 'get_kyc_record',
+      method: "get_kyc_record",
       args: publisherAddress ? [addressToScVal(publisherAddress)] : [],
     },
     enabled && !!publisherAddress,
@@ -454,7 +465,7 @@ export function usePublisherEarnings(publisherAddress: string, enabled = true) {
   return useContractRead<bigint>(
     {
       contractId: CONTRACT_IDS.REVENUE_SETTLEMENT,
-      method: 'get_publisher_balance',
+      method: "get_publisher_balance",
       args: publisherAddress ? [addressToScVal(publisherAddress)] : [],
     },
     enabled && !!publisherAddress,
@@ -468,7 +479,7 @@ export function useAuctionCount(enabled = true) {
   return useContractRead<number>(
     {
       contractId: CONTRACT_IDS.AUCTION_ENGINE,
-      method: 'get_auction_count',
+      method: "get_auction_count",
       args: [],
     },
     enabled,
@@ -484,7 +495,7 @@ export function usePublisherAuctions(
   enabled = true,
 ) {
   return useQuery({
-    queryKey: ['publisher_auctions', publisherAddress, auctionCount],
+    queryKey: ["publisher_auctions", publisherAddress, auctionCount],
     queryFn: async () => {
       if (!auctionCount || auctionCount === 0) return [];
       const auctions: any[] = [];
@@ -493,7 +504,7 @@ export function usePublisherAuctions(
         promises.push(
           callReadOnly({
             contractId: CONTRACT_IDS.AUCTION_ENGINE,
-            method: 'get_auction',
+            method: "get_auction",
             args: [u64ToScVal(i)],
           })
             .then((auction) => {
@@ -519,11 +530,11 @@ export function useSubscribe() {
   const { address } = useWalletStore();
 
   const subscribe = async (params: { planName: string; amountXlm: number }) => {
-    if (!address) throw new Error('Wallet not connected');
+    if (!address) throw new Error("Wallet not connected");
     const STROOPS = 10_000_000;
     return mutateAsync({
       contractId: CONTRACT_IDS.SUBSCRIPTION_MANAGER,
-      method: 'subscribe',
+      method: "subscribe",
       source: address,
       args: [
         addressToScVal(address),

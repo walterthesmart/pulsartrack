@@ -188,6 +188,34 @@ impl AnalyticsAggregatorContract {
         env.storage().instance().set(&DataKey::GlobalStats, &global);
     }
 
+    pub fn record_conversion(env: Env, caller: Address, campaign_id: u64) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        caller.require_auth();
+
+        let mut analytics: CampaignAnalytics = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CampaignAnalytics(campaign_id))
+            .expect("analytics not found");
+
+        analytics.total_conversions += 1;
+        if analytics.total_clicks > 0 {
+            analytics.cvr =
+                (analytics.total_conversions * 10_000 / analytics.total_clicks) as u32;
+        }
+        analytics.last_updated = env.ledger().timestamp();
+
+        let _ttl_key = DataKey::CampaignAnalytics(campaign_id);
+        env.storage().persistent().set(&_ttl_key, &analytics);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+    }
+
     pub fn get_campaign_analytics(env: Env, campaign_id: u64) -> Option<CampaignAnalytics> {
         env.storage()
             .instance()

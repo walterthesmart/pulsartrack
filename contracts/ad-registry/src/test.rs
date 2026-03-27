@@ -15,7 +15,9 @@ fn s(env: &Env, v: &str) -> String {
 }
 
 fn register(c: &AdRegistryContractClient, env: &Env) -> u64 {
+    let advertiser = Address::generate(env);
     c.register_content(
+        &advertiser,
         &1u64,
         &s(env, "QmHash"),
         &ContentFormat::Image,
@@ -72,6 +74,27 @@ fn test_register_content() {
 }
 
 #[test]
+fn test_owner_set_to_advertiser() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _) = setup(&env);
+    let advertiser = Address::generate(&env);
+    let cid = c.register_content(
+        &advertiser,
+        &1u64,
+        &s(&env, "QmHash"),
+        &ContentFormat::Image,
+        &500u64,
+        &s(&env, "Title"),
+        &s(&env, "Desc"),
+        &s(&env, "CTA"),
+        &s(&env, "https://example.com"),
+    );
+    let content = c.get_content(&cid).unwrap();
+    assert_eq!(content.owner, advertiser);
+}
+
+#[test]
 fn test_register_multiple() {
     let env = Env::default();
     env.mock_all_auths();
@@ -89,7 +112,9 @@ fn test_register_content_too_small() {
     let env = Env::default();
     env.mock_all_auths();
     let (c, _) = setup(&env);
+    let advertiser = Address::generate(&env);
     c.register_content(
+        &advertiser,
         &1u64,
         &s(&env, "QmHash"),
         &ContentFormat::Image,

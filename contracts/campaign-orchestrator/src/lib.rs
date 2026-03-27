@@ -118,6 +118,8 @@ const INSTANCE_LIFETIME_THRESHOLD: u32 = 17_280;
 const INSTANCE_BUMP_AMOUNT: u32 = 86_400;
 const PERSISTENT_LIFETIME_THRESHOLD: u32 = 120_960;
 const PERSISTENT_BUMP_AMOUNT: u32 = 1_051_200;
+const DAILY_VIEWS_LIFETIME_THRESHOLD: u32 = 17_280;
+const DAILY_VIEWS_BUMP_AMOUNT: u32 = 34_560;
 
 #[contract]
 pub struct CampaignOrchestratorContract;
@@ -361,26 +363,13 @@ impl CampaignOrchestratorContract {
         // Check daily view limit
         let current_day = env.ledger().timestamp() / 86_400;
         let daily_key = DataKey::DailyViews(campaign_id, current_day);
-        let daily_views: u64 = env.storage().temporary().get(&daily_key).unwrap_or(0);
+        let daily_views: u64 = env.storage().persistent().get(&daily_key).unwrap_or(0);
 
         if daily_views >= campaign.daily_view_limit {
             panic!("daily view limit reached");
         }
 
-        // Transfer payment to publisher
-        let token_addr: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::TokenAddress)
-            .unwrap();
-        let token_client = token::Client::new(&env, &token_addr);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &publisher,
-            &campaign.cost_per_view,
-        );
-
-        // Update campaign
+        // CEI: update state BEFORE external transfer
         campaign.remaining_budget -= campaign.cost_per_view;
         campaign.current_views += 1;
         campaign.last_updated = env.ledger().timestamp();
@@ -397,8 +386,26 @@ impl CampaignOrchestratorContract {
             PERSISTENT_BUMP_AMOUNT,
         );
         env.storage()
-            .temporary()
+            .persistent()
             .set(&daily_key, &(daily_views + 1));
+        env.storage().persistent().extend_ttl(
+            &daily_key,
+            DAILY_VIEWS_LIFETIME_THRESHOLD,
+            DAILY_VIEWS_BUMP_AMOUNT,
+        );
+
+        // External interaction LAST
+        let token_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenAddress)
+            .unwrap();
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &publisher,
+            &campaign.cost_per_view,
+        );
 
         // Update publisher earnings
         Self::_update_publisher_earnings(&env, &publisher, campaign.cost_per_view);

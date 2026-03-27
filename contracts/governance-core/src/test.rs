@@ -1,6 +1,6 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Env};
+use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Env};
 
 fn setup(env: &Env) -> (GovernanceCoreContractClient<'_>, Address) {
     let admin = Address::generate(env);
@@ -119,4 +119,27 @@ fn test_get_role_grant_nonexistent() {
     assert!(c
         .get_role_grant(&Address::generate(&env), &Role::Operator)
         .is_none());
+}
+
+#[test]
+fn test_expired_role_removed_from_storage() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, admin) = setup(&env);
+    let account = Address::generate(&env);
+
+    // Grant a role that expires at timestamp 100
+    c.grant_role(&admin, &account, &Role::Moderator, &Some(100u64));
+    assert!(c.has_role(&account, &Role::Moderator));
+
+    // Advance ledger timestamp past expiry
+    env.ledger().with_mut(|li| {
+        li.timestamp = 200;
+    });
+
+    // has_role should return false and clean up the expired grant
+    assert!(!c.has_role(&account, &Role::Moderator));
+
+    // The grant should be removed from storage entirely
+    assert!(c.get_role_grant(&account, &Role::Moderator).is_none());
 }

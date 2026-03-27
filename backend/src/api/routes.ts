@@ -52,7 +52,9 @@ router.get("/network", async (_req: Request, res: Response) => {
       feeStats: fees,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    _req.log?.error({ err }, 'Failed to fetch network info');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to fetch network info', ...(details && { details }) });
   }
 });
 
@@ -66,7 +68,9 @@ router.get("/account/:address", async (req: Request, res: Response) => {
     }
     res.json(account);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    req.log?.error({ err }, 'Failed to fetch account details');
+    const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+    res.status(500).json({ error: 'Failed to fetch account details', ...(details && { details }) });
   }
 });
 
@@ -80,7 +84,9 @@ router.get(
       const txs = await getAccountTransactions(address as string, limit);
       res.json({ transactions: txs, count: txs.length });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      req.log?.error({ err }, 'Failed to fetch account transactions');
+      const details = process.env.NODE_ENV === 'development' ? err.message : undefined;
+      res.status(500).json({ error: 'Failed to fetch account transactions', ...(details && { details }) });
     }
   },
 );

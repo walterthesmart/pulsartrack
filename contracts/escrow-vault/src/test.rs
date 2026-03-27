@@ -484,6 +484,46 @@ fn test_release_partial_exceeds_locked() {
     client.release_partial(&depositor, &escrow_id, &200_000i128); // more than locked
 }
 
+#[test]
+fn test_release_after_partial_released_amount_correct() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let token_admin = Address::generate(&env);
+    let token_addr = deploy_token(&env, &token_admin);
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let contract_id = env.register_contract(None, EscrowVaultContract);
+    let client = EscrowVaultContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &token_addr, &oracle);
+
+    let depositor = Address::generate(&env);
+    let beneficiary = Address::generate(&env);
+    let approver = Address::generate(&env);
+    mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
+
+    let escrow_id = client.create_escrow(
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &999_999u64,
+        &vec![&env, approver.clone()],
+    );
+
+    client.approve_release(&approver, &escrow_id);
+    client.release_partial(&depositor, &escrow_id, &40_000i128);
+    client.release_escrow(&depositor, &escrow_id);
+
+    let escrow = client.get_escrow(&escrow_id).unwrap();
+    assert_eq!(escrow.released_amount, 100_000);
+    assert_eq!(escrow.locked_amount, 0);
+
+    let tc = TokenClient::new(&env, &token_addr);
+    assert_eq!(tc.balance(&beneficiary), 100_000);
+}
+
 // ─── refund_escrow ───────────────────────────────────────────────────────────
 
 #[test]

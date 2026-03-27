@@ -372,7 +372,7 @@ impl EscrowVaultContract {
         );
 
         escrow.locked_amount = 0;
-        escrow.released_amount = escrow.amount;
+        escrow.released_amount += locked;
         escrow.state = EscrowState::Released;
         escrow.released_at = Some(env.ledger().timestamp());
 

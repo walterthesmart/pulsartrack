@@ -408,7 +408,10 @@ impl FraudPreventionContract {
         publisher: &Address,
         viewer: &Address,
     ) -> BytesN<32> {
-        // Create a deterministic ID from campaign+publisher+viewer+timestamp
+        // Deterministic ID from campaign_id + publisher + viewer.
+        // Timestamp is intentionally excluded: including it would allow the
+        // same (campaign, publisher, viewer) triplet to bypass duplicate
+        // detection simply by waiting one second between calls.
         let mut data = Bytes::new(env);
         let campaign_bytes = campaign_id.to_be_bytes();
         for b in campaign_bytes.iter() {
@@ -416,10 +419,6 @@ impl FraudPreventionContract {
         }
         data.append(&publisher.to_xdr(env));
         data.append(&viewer.to_xdr(env));
-        let ts_bytes = env.ledger().timestamp().to_be_bytes();
-        for b in ts_bytes.iter() {
-            data.push_back(*b);
-        }
         env.crypto().sha256(&data).into()
     }
 

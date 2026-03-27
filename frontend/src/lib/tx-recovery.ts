@@ -9,9 +9,11 @@ import { useTransactionStore } from "../store/tx-store";
  * Should be called on app initialization
  */
 export async function checkPendingTransactions(): Promise<void> {
-  const { getPendingTransactions, updateTransaction } =
+  const { transactions, updateTransaction } =
     useTransactionStore.getState();
-  const pendingTxs = getPendingTransactions();
+  const pendingTxs = transactions.filter(
+    (tx) => tx.status === "pending" || tx.status === "timeout",
+  );
 
   if (pendingTxs.length === 0) return;
 
@@ -59,13 +61,14 @@ export async function checkPendingTransactions(): Promise<void> {
 export async function pollTransaction(
   txHash: string,
   maxAttempts: number = 10,
-  intervalMs: number = 3000,
+  initialIntervalMs: number = 2000,
 ): Promise<{ success: boolean; result?: any; error?: string }> {
   const server = getSorobanServer();
   const { updateTransaction } = useTransactionStore.getState();
 
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    const delay = Math.min(initialIntervalMs * Math.pow(1.5, i), 10000);
+    await new Promise((resolve) => setTimeout(resolve, delay));
 
     try {
       const result = await server.getTransaction(txHash);
@@ -92,5 +95,9 @@ export async function pollTransaction(
     }
   }
 
+  updateTransaction(txHash, {
+    status: "timeout",
+    error: "Transaction confirmation timed out — check explorer",
+  });
   return { success: false, error: "Polling timeout" };
 }

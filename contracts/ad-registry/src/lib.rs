@@ -139,6 +139,7 @@ impl AdRegistryContract {
     /// Register new ad content
     pub fn register_content(
         env: Env,
+        advertiser: Address,
         campaign_id: u64,
         ipfs_hash: String,
         format: ContentFormat,
@@ -151,11 +152,7 @@ impl AdRegistryContract {
         env.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        let caller = env.current_contract_address();
-        let _ = caller; // will be overridden by auth
-                        // Use invoker auth pattern
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
-        let _ = admin;
+        advertiser.require_auth();
 
         let min_size: u64 = env
             .storage()
@@ -181,7 +178,7 @@ impl AdRegistryContract {
 
         let content = AdContent {
             campaign_id,
-            owner: env.current_contract_address(),
+            owner: advertiser.clone(),
             ipfs_hash,
             format,
             size,

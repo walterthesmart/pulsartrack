@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
-export type TransactionStatus = "pending" | "success" | "failed";
+export type TransactionStatus = "pending" | "success" | "failed" | "timeout";
 
 export type TransactionType =
   | "campaign_create"
